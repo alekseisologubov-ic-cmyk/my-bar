@@ -7,6 +7,7 @@ type View =
   | "pos"
   | "tabs"
   | "menu"
+  | "products"
   | "admin"
   | "users"
   | "reports"
@@ -16,6 +17,7 @@ type PaymentMethod = "cash" | "card" | "mobile";
 type UserRole = "Admin" | "Manager" | "Bartender" | "Waiter";
 type TabType = "bar" | "table";
 type OrderStatus = "paid" | "voided";
+type MovementType = "delivery" | "waste" | "adjustment" | "sale";
 
 type StaffUser = {
   id: string;
@@ -76,13 +78,45 @@ type Order = {
   status: OrderStatus;
 };
 
+type InventoryProduct = {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  stock: number;
+  reorderPoint: number;
+  costPerUnit: number;
+  supplier: string;
+  active: boolean;
+};
+
+type StockMovement = {
+  id: string;
+  productId: string;
+  productNameSnapshot: string;
+  type: MovementType;
+  signedQuantity: number;
+  unitCost: number;
+  supplier: string;
+  reference: string;
+  note: string;
+  createdAt: string;
+};
+
+type RecipeItem = {
+  id: string;
+  menuItemId: string;
+  productId: string;
+  quantity: number;
+};
+
 type TabCloseForm = {
   paymentMethod: PaymentMethod;
   tip: string;
   discount: string;
 };
 
-const STORAGE_KEY = "my-bar-pos-v3";
+const STORAGE_KEY = "my-bar-pos-v4";
 
 const DEFAULT_USERS: StaffUser[] = [
   { id: "user-owner", name: "Owner", role: "Admin", active: true },
@@ -111,6 +145,120 @@ const DEFAULT_MENU: MenuItem[] = [
   { id: "burger", name: "Burger", category: "Food", price: 13, active: true }
 ];
 
+const DEFAULT_PRODUCTS: InventoryProduct[] = [
+  {
+    id: "product-lager-keg",
+    name: "Lager Keg",
+    category: "Alcohol",
+    unit: "L",
+    stock: 50,
+    reorderPoint: 10,
+    costPerUnit: 2.3,
+    supplier: "BrewCo",
+    active: true
+  },
+  {
+    id: "product-bottle-beer",
+    name: "Bottle Beer Stock",
+    category: "Alcohol",
+    unit: "bottle",
+    stock: 80,
+    reorderPoint: 24,
+    costPerUnit: 2.1,
+    supplier: "BrewCo",
+    active: true
+  },
+  {
+    id: "product-white-rum",
+    name: "White Rum",
+    category: "Alcohol",
+    unit: "ml",
+    stock: 5000,
+    reorderPoint: 1000,
+    costPerUnit: 0.018,
+    supplier: "Spirits Supplier",
+    active: true
+  },
+  {
+    id: "product-bourbon",
+    name: "Bourbon",
+    category: "Alcohol",
+    unit: "ml",
+    stock: 4000,
+    reorderPoint: 1000,
+    costPerUnit: 0.024,
+    supplier: "Spirits Supplier",
+    active: true
+  },
+  {
+    id: "product-vodka",
+    name: "Vodka",
+    category: "Alcohol",
+    unit: "ml",
+    stock: 5000,
+    reorderPoint: 1000,
+    costPerUnit: 0.016,
+    supplier: "Spirits Supplier",
+    active: true
+  },
+  {
+    id: "product-cola",
+    name: "Cola",
+    category: "Soft Drinks",
+    unit: "bottle",
+    stock: 48,
+    reorderPoint: 12,
+    costPerUnit: 0.75,
+    supplier: "Drinks Supplier",
+    active: true
+  },
+  {
+    id: "product-water",
+    name: "Sparkling Water",
+    category: "Soft Drinks",
+    unit: "bottle",
+    stock: 36,
+    reorderPoint: 12,
+    costPerUnit: 0.55,
+    supplier: "Drinks Supplier",
+    active: true
+  },
+  {
+    id: "product-fries",
+    name: "Fries Portion",
+    category: "Food",
+    unit: "portion",
+    stock: 60,
+    reorderPoint: 15,
+    costPerUnit: 1.1,
+    supplier: "Food Supplier",
+    active: true
+  },
+  {
+    id: "product-burger-patty",
+    name: "Burger Patty",
+    category: "Food",
+    unit: "unit",
+    stock: 40,
+    reorderPoint: 10,
+    costPerUnit: 2.2,
+    supplier: "Food Supplier",
+    active: true
+  }
+];
+
+const DEFAULT_RECIPES: RecipeItem[] = [
+  { id: "recipe-draft-beer-lager", menuItemId: "draft-beer", productId: "product-lager-keg", quantity: 0.5 },
+  { id: "recipe-bottle-beer", menuItemId: "bottle-beer", productId: "product-bottle-beer", quantity: 1 },
+  { id: "recipe-mojito-rum", menuItemId: "mojito", productId: "product-white-rum", quantity: 50 },
+  { id: "recipe-old-fashioned-bourbon", menuItemId: "old-fashioned", productId: "product-bourbon", quantity: 60 },
+  { id: "recipe-vodka-soda-vodka", menuItemId: "vodka-soda", productId: "product-vodka", quantity: 50 },
+  { id: "recipe-cola", menuItemId: "cola", productId: "product-cola", quantity: 1 },
+  { id: "recipe-water", menuItemId: "sparkling-water", productId: "product-water", quantity: 1 },
+  { id: "recipe-fries", menuItemId: "fries", productId: "product-fries", quantity: 1 },
+  { id: "recipe-burger-patty", menuItemId: "burger", productId: "product-burger-patty", quantity: 1 }
+];
+
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -122,10 +270,23 @@ function money(value: number) {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+function numberText(value: number) {
+  return new Intl.NumberFormat("en-IE", {
+    maximumFractionDigits: 3
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
 function paymentLabel(method: PaymentMethod) {
   if (method === "cash") return "Cash";
   if (method === "card") return "Card";
   return "Mobile Pay";
+}
+
+function movementLabel(type: MovementType) {
+  if (type === "delivery") return "Delivery";
+  if (type === "waste") return "Waste / Spillage";
+  if (type === "adjustment") return "Adjustment";
+  return "Sale Deduction";
 }
 
 function calculateSubtotal(items: CartItem[]) {
@@ -133,7 +294,7 @@ function calculateSubtotal(items: CartItem[]) {
 }
 
 function mergeItems(existingItems: CartItem[], incomingItems: CartItem[]) {
-  const merged = [...existingItems];
+  const merged = existingItems.map((item) => ({ ...item }));
 
   incomingItems.forEach((incoming) => {
     const existing = merged.find((item) => item.itemId === incoming.itemId);
@@ -166,6 +327,10 @@ export default function HomePage() {
   const [tabs, setTabs] = useState<CustomerTab[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  const [inventoryProducts, setInventoryProducts] = useState<InventoryProduct[]>(DEFAULT_PRODUCTS);
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
+  const [recipes, setRecipes] = useState<RecipeItem[]>(DEFAULT_RECIPES);
 
   const [currentStaffUserId, setCurrentStaffUserId] = useState(DEFAULT_USERS[2].id);
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -202,6 +367,43 @@ export default function HomePage() {
     staffUserId: DEFAULT_USERS[2].id
   });
 
+  const [newProduct, setNewProduct] = useState({
+    name: "",
+    category: "Alcohol",
+    unit: "unit",
+    stock: "",
+    reorderPoint: "",
+    costPerUnit: "",
+    supplier: ""
+  });
+
+  const [deliveryForm, setDeliveryForm] = useState({
+    productId: DEFAULT_PRODUCTS[0].id,
+    quantity: "",
+    unitCost: "",
+    supplier: "",
+    reference: "",
+    note: ""
+  });
+
+  const [wasteForm, setWasteForm] = useState({
+    productId: DEFAULT_PRODUCTS[0].id,
+    quantity: "",
+    note: ""
+  });
+
+  const [adjustmentForm, setAdjustmentForm] = useState({
+    productId: DEFAULT_PRODUCTS[0].id,
+    quantity: "",
+    note: ""
+  });
+
+  const [recipeForm, setRecipeForm] = useState({
+    menuItemId: DEFAULT_MENU[0].id,
+    productId: DEFAULT_PRODUCTS[0].id,
+    quantity: ""
+  });
+
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
 
@@ -213,6 +415,9 @@ export default function HomePage() {
           tables?: VenueTable[];
           tabs?: CustomerTab[];
           orders?: Order[];
+          inventoryProducts?: InventoryProduct[];
+          stockMovements?: StockMovement[];
+          recipes?: RecipeItem[];
         };
 
         if (Array.isArray(parsed.menuItems)) setMenuItems(parsed.menuItems);
@@ -220,6 +425,9 @@ export default function HomePage() {
         if (Array.isArray(parsed.tables)) setTables(parsed.tables);
         if (Array.isArray(parsed.tabs)) setTabs(parsed.tabs);
         if (Array.isArray(parsed.orders)) setOrders(parsed.orders);
+        if (Array.isArray(parsed.inventoryProducts)) setInventoryProducts(parsed.inventoryProducts);
+        if (Array.isArray(parsed.stockMovements)) setStockMovements(parsed.stockMovements);
+        if (Array.isArray(parsed.recipes)) setRecipes(parsed.recipes);
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
       }
@@ -238,10 +446,13 @@ export default function HomePage() {
         users,
         tables,
         tabs,
-        orders
+        orders,
+        inventoryProducts,
+        stockMovements,
+        recipes
       })
     );
-  }, [loaded, menuItems, users, tables, tabs, orders]);
+  }, [loaded, menuItems, users, tables, tabs, orders, inventoryProducts, stockMovements, recipes]);
 
   useEffect(() => {
     if (selectedTabTarget === "quick") return;
@@ -257,6 +468,10 @@ export default function HomePage() {
   const activeTables = tables.filter((table) => table.active);
   const openTabs = tabs.filter((tab) => tab.status === "open");
   const closedTabs = tabs.filter((tab) => tab.status === "closed");
+  const activeProducts = inventoryProducts.filter((product) => product.active);
+  const lowStockProducts = inventoryProducts.filter(
+    (product) => product.active && product.stock <= product.reorderPoint
+  );
 
   const categories = useMemo(() => {
     const uniqueCategories = new Set<string>();
@@ -301,6 +516,11 @@ export default function HomePage() {
 
   const openTabValue = openTabs.reduce((sum, tab) => sum + calculateSubtotal(tab.items), 0);
 
+  const inventoryValue = inventoryProducts.reduce(
+    (sum, product) => sum + product.stock * product.costPerUnit,
+    0
+  );
+
   const salesByCategory = useMemo(() => {
     const totals = new Map<string, number>();
 
@@ -341,6 +561,14 @@ export default function HomePage() {
     return tables.find((table) => table.id === tableId)?.name || "Unknown table";
   }
 
+  function getMenuItemName(menuItemId: string) {
+    return menuItems.find((item) => item.id === menuItemId)?.name || "Unknown menu item";
+  }
+
+  function getProduct(productId: string) {
+    return inventoryProducts.find((product) => product.id === productId);
+  }
+
   function addToCart(item: MenuItem) {
     if (!item.active) return;
 
@@ -379,6 +607,59 @@ export default function HomePage() {
     );
   }
 
+  function deductStockForOrderItems(orderItems: CartItem[], reference: string) {
+    const requiredProducts = new Map<string, number>();
+
+    orderItems.forEach((orderItem) => {
+      recipes
+        .filter((recipe) => recipe.menuItemId === orderItem.itemId)
+        .forEach((recipe) => {
+          const current = requiredProducts.get(recipe.productId) || 0;
+          requiredProducts.set(recipe.productId, current + recipe.quantity * orderItem.quantity);
+        });
+    });
+
+    if (requiredProducts.size === 0) return;
+
+    setInventoryProducts((current) =>
+      current.map((product) => {
+        const requiredQuantity = requiredProducts.get(product.id) || 0;
+
+        if (requiredQuantity === 0) {
+          return product;
+        }
+
+        return {
+          ...product,
+          stock: product.stock - requiredQuantity
+        };
+      })
+    );
+
+    const now = new Date().toISOString();
+
+    const saleMovements: StockMovement[] = Array.from(requiredProducts.entries()).map(
+      ([productId, quantity]) => {
+        const product = getProduct(productId);
+
+        return {
+          id: makeId("movement"),
+          productId,
+          productNameSnapshot: product?.name || "Unknown product",
+          type: "sale",
+          signedQuantity: -quantity,
+          unitCost: product?.costPerUnit || 0,
+          supplier: product?.supplier || "",
+          reference,
+          note: "Automatic deduction from menu item recipe",
+          createdAt: now
+        };
+      }
+    );
+
+    setStockMovements((current) => [...saleMovements, ...current]);
+  }
+
   function completeQuickSale() {
     if (cart.length === 0) {
       alert("Add items first.");
@@ -401,6 +682,8 @@ export default function HomePage() {
     };
 
     setOrders((current) => [newOrder, ...current]);
+    deductStockForOrderItems(cart, `Order #${newOrder.number}`);
+
     setCart([]);
     setTip("0");
     setDiscount("0");
@@ -549,6 +832,7 @@ export default function HomePage() {
     };
 
     setOrders((current) => [newOrder, ...current]);
+    deductStockForOrderItems(tab.items, `Order #${newOrder.number} from ${tab.name}`);
 
     setTabs((current) =>
       current.map((currentTab) =>
@@ -632,6 +916,306 @@ export default function HomePage() {
 
     setMenuItems((current) => current.filter((item) => item.id !== itemId));
     setCart((current) => current.filter((item) => item.itemId !== itemId));
+    setRecipes((current) => current.filter((recipe) => recipe.menuItemId !== itemId));
+  }
+
+  function addProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const name = newProduct.name.trim();
+    const category = newProduct.category.trim();
+    const unit = newProduct.unit.trim();
+    const stock = Number(newProduct.stock) || 0;
+    const reorderPoint = Number(newProduct.reorderPoint) || 0;
+    const costPerUnit = Number(newProduct.costPerUnit) || 0;
+    const supplier = newProduct.supplier.trim();
+
+    if (!name) {
+      alert("Enter product name.");
+      return;
+    }
+
+    if (!category) {
+      alert("Enter product category.");
+      return;
+    }
+
+    if (!unit) {
+      alert("Enter unit, for example ml, L, bottle, kg, portion, unit.");
+      return;
+    }
+
+    const product: InventoryProduct = {
+      id: makeId("product"),
+      name,
+      category,
+      unit,
+      stock,
+      reorderPoint,
+      costPerUnit,
+      supplier,
+      active: true
+    };
+
+    setInventoryProducts((current) => [...current, product]);
+
+    if (stock !== 0) {
+      const movement: StockMovement = {
+        id: makeId("movement"),
+        productId: product.id,
+        productNameSnapshot: product.name,
+        type: "adjustment",
+        signedQuantity: stock,
+        unitCost: costPerUnit,
+        supplier,
+        reference: "Opening stock",
+        note: "Initial stock entered when product was created",
+        createdAt: new Date().toISOString()
+      };
+
+      setStockMovements((current) => [movement, ...current]);
+    }
+
+    setNewProduct({
+      name: "",
+      category,
+      unit,
+      stock: "",
+      reorderPoint: "",
+      costPerUnit: "",
+      supplier
+    });
+  }
+
+  function updateProduct(productId: string, changes: Partial<InventoryProduct>) {
+    setInventoryProducts((current) =>
+      current.map((product) => (product.id === productId ? { ...product, ...changes } : product))
+    );
+  }
+
+  function toggleProduct(productId: string) {
+    setInventoryProducts((current) =>
+      current.map((product) =>
+        product.id === productId ? { ...product, active: !product.active } : product
+      )
+    );
+  }
+
+  function applyStockMovement(params: {
+    productId: string;
+    type: MovementType;
+    signedQuantity: number;
+    unitCost?: number;
+    supplier?: string;
+    reference?: string;
+    note?: string;
+  }) {
+    const product = getProduct(params.productId);
+
+    if (!product) {
+      alert("Product not found.");
+      return;
+    }
+
+    if (!Number.isFinite(params.signedQuantity) || params.signedQuantity === 0) {
+      alert("Enter a valid quantity.");
+      return;
+    }
+
+    const unitCost = Number.isFinite(params.unitCost || 0)
+      ? params.unitCost || product.costPerUnit
+      : product.costPerUnit;
+
+    setInventoryProducts((current) =>
+      current.map((currentProduct) =>
+        currentProduct.id === product.id
+          ? {
+              ...currentProduct,
+              stock: currentProduct.stock + params.signedQuantity,
+              costPerUnit:
+                params.type === "delivery" && unitCost > 0
+                  ? unitCost
+                  : currentProduct.costPerUnit,
+              supplier:
+                params.type === "delivery" && params.supplier
+                  ? params.supplier
+                  : currentProduct.supplier
+            }
+          : currentProduct
+      )
+    );
+
+    const movement: StockMovement = {
+      id: makeId("movement"),
+      productId: product.id,
+      productNameSnapshot: product.name,
+      type: params.type,
+      signedQuantity: params.signedQuantity,
+      unitCost,
+      supplier: params.supplier || product.supplier,
+      reference: params.reference || "",
+      note: params.note || "",
+      createdAt: new Date().toISOString()
+    };
+
+    setStockMovements((current) => [movement, ...current]);
+  }
+
+  function receiveStock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const product = getProduct(deliveryForm.productId);
+    const quantity = Number(deliveryForm.quantity);
+    const unitCost = Number(deliveryForm.unitCost);
+
+    if (!product) {
+      alert("Select a product.");
+      return;
+    }
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      alert("Enter delivery quantity.");
+      return;
+    }
+
+    applyStockMovement({
+      productId: product.id,
+      type: "delivery",
+      signedQuantity: quantity,
+      unitCost: Number.isFinite(unitCost) && unitCost > 0 ? unitCost : product.costPerUnit,
+      supplier: deliveryForm.supplier.trim() || product.supplier,
+      reference: deliveryForm.reference.trim(),
+      note: deliveryForm.note.trim() || "Product arrived / stock received"
+    });
+
+    setDeliveryForm({
+      productId: product.id,
+      quantity: "",
+      unitCost: "",
+      supplier: deliveryForm.supplier.trim() || product.supplier,
+      reference: "",
+      note: ""
+    });
+  }
+
+  function recordWaste(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const product = getProduct(wasteForm.productId);
+    const quantity = Number(wasteForm.quantity);
+
+    if (!product) {
+      alert("Select a product.");
+      return;
+    }
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      alert("Enter waste/spillage quantity.");
+      return;
+    }
+
+    applyStockMovement({
+      productId: product.id,
+      type: "waste",
+      signedQuantity: -quantity,
+      unitCost: product.costPerUnit,
+      supplier: product.supplier,
+      reference: "Waste / spillage",
+      note: wasteForm.note.trim() || "Waste or spillage recorded"
+    });
+
+    setWasteForm({
+      productId: product.id,
+      quantity: "",
+      note: ""
+    });
+  }
+
+  function recordAdjustment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const product = getProduct(adjustmentForm.productId);
+    const quantity = Number(adjustmentForm.quantity);
+
+    if (!product) {
+      alert("Select a product.");
+      return;
+    }
+
+    if (!Number.isFinite(quantity) || quantity === 0) {
+      alert("Enter adjustment quantity. Use positive to add stock or negative to reduce stock.");
+      return;
+    }
+
+    applyStockMovement({
+      productId: product.id,
+      type: "adjustment",
+      signedQuantity: quantity,
+      unitCost: product.costPerUnit,
+      supplier: product.supplier,
+      reference: "Manual adjustment",
+      note: adjustmentForm.note.trim() || "Manual stock adjustment"
+    });
+
+    setAdjustmentForm({
+      productId: product.id,
+      quantity: "",
+      note: ""
+    });
+  }
+
+  function addRecipeItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const quantity = Number(recipeForm.quantity);
+
+    if (!recipeForm.menuItemId) {
+      alert("Select menu item.");
+      return;
+    }
+
+    if (!recipeForm.productId) {
+      alert("Select inventory product.");
+      return;
+    }
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      alert("Enter quantity used per sale.");
+      return;
+    }
+
+    const existing = recipes.find(
+      (recipe) =>
+        recipe.menuItemId === recipeForm.menuItemId &&
+        recipe.productId === recipeForm.productId
+    );
+
+    if (existing) {
+      setRecipes((current) =>
+        current.map((recipe) =>
+          recipe.id === existing.id ? { ...recipe, quantity } : recipe
+        )
+      );
+    } else {
+      setRecipes((current) => [
+        ...current,
+        {
+          id: makeId("recipe"),
+          menuItemId: recipeForm.menuItemId,
+          productId: recipeForm.productId,
+          quantity
+        }
+      ]);
+    }
+
+    setRecipeForm({
+      ...recipeForm,
+      quantity: ""
+    });
+  }
+
+  function deleteRecipeItem(recipeId: string) {
+    setRecipes((current) => current.filter((recipe) => recipe.id !== recipeId));
   }
 
   function addUser(event: FormEvent<HTMLFormElement>) {
@@ -750,7 +1334,10 @@ export default function HomePage() {
       users,
       tables,
       tabs,
-      orders
+      orders,
+      inventoryProducts,
+      stockMovements,
+      recipes
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -778,6 +1365,9 @@ export default function HomePage() {
     setTabs([]);
     setOrders([]);
     setCart([]);
+    setInventoryProducts(DEFAULT_PRODUCTS);
+    setStockMovements([]);
+    setRecipes(DEFAULT_RECIPES);
     setTip("0");
     setDiscount("0");
     setCashCounted("");
@@ -790,6 +1380,7 @@ export default function HomePage() {
     { key: "pos", label: "POS" },
     { key: "tabs", label: "Tables & Tabs" },
     { key: "menu", label: "Menu Setup" },
+    { key: "products", label: "Products / Stock" },
     { key: "admin", label: "Admin" },
     { key: "users", label: "Users" },
     { key: "reports", label: "Reports" },
@@ -814,7 +1405,7 @@ export default function HomePage() {
       <header className="header">
         <div className="container">
           <h1>My Bar POS</h1>
-          <p>Phase 1: sales, menu setup, tables, tabs, users, admin, reports, and closing.</p>
+          <p>Phase 1: POS, menu, tables, users, products, stock, reports, and closing.</p>
 
           <nav className="nav">
             {navItems.map((item) => (
@@ -838,16 +1429,16 @@ export default function HomePage() {
             <div className="kpi-value">{money(salesTotal)}</div>
           </div>
           <div className="card">
-            <div className="kpi-label">Orders</div>
-            <div className="kpi-value">{paidOrders.length}</div>
-          </div>
-          <div className="card">
             <div className="kpi-label">Open Tabs</div>
             <div className="kpi-value">{openTabs.length}</div>
           </div>
           <div className="card">
-            <div className="kpi-label">Open Tab Value</div>
-            <div className="kpi-value">{money(openTabValue)}</div>
+            <div className="kpi-label">Inventory Value</div>
+            <div className="kpi-value">{money(inventoryValue)}</div>
+          </div>
+          <div className="card">
+            <div className="kpi-label">Low Stock</div>
+            <div className="kpi-value">{lowStockProducts.length}</div>
           </div>
         </div>
 
@@ -856,41 +1447,38 @@ export default function HomePage() {
             <div className="card">
               <h2>Dashboard</h2>
               <p>
-                Your Vercel app is running with POS, menu setup, tables, bar tabs, users,
-                admin controls, reports, and daily closing.
+                Your app now includes POS, menu setup, tables, tabs, users, admin controls,
+                product stock, stock arrivals, waste, recipes, and automatic stock deduction.
               </p>
 
               <div className="button-row">
                 <button className="primary" type="button" onClick={() => setView("pos")}>
                   Open POS
                 </button>
+                <button className="secondary" type="button" onClick={() => setView("products")}>
+                  Open Products / Stock
+                </button>
                 <button className="secondary" type="button" onClick={() => setView("tabs")}>
                   Open Tabs
-                </button>
-                <button className="secondary" type="button" onClick={() => setView("admin")}>
-                  Admin Dashboard
                 </button>
               </div>
             </div>
 
             <div className="card">
-              <h2>Today Snapshot</h2>
-              <div className="line">
-                <span>Cash</span>
-                <strong>{money(cashTotal)}</strong>
-              </div>
-              <div className="line">
-                <span>Card</span>
-                <strong>{money(cardTotal)}</strong>
-              </div>
-              <div className="line">
-                <span>Mobile Pay</span>
-                <strong>{money(mobileTotal)}</strong>
-              </div>
-              <div className="line">
-                <span>Tips</span>
-                <strong>{money(tipsTotal)}</strong>
-              </div>
+              <h2>Stock Alerts</h2>
+
+              {lowStockProducts.length === 0 && <p className="muted">No low-stock products right now.</p>}
+
+              {lowStockProducts.slice(0, 8).map((product) => (
+                <div className="line" key={product.id}>
+                  <span>
+                    {product.name} · {product.supplier || "No supplier"}
+                  </span>
+                  <strong className="status-voided">
+                    {numberText(product.stock)} {product.unit}
+                  </strong>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -1309,7 +1897,7 @@ export default function HomePage() {
               </form>
 
               <div className="notice">
-                Suggested categories: Beer, Wine, Cocktails, Spirits, Soft Drinks, Food, Snacks.
+                After adding a menu item, connect it to products in Products / Stock using recipes.
               </div>
             </div>
 
@@ -1414,6 +2002,571 @@ export default function HomePage() {
           </div>
         )}
 
+        {view === "products" && (
+          <div className="grid grid-2" style={{ marginTop: 16 }}>
+            <div className="card">
+              <h2>Product / Inventory Dashboard</h2>
+
+              <div className="line">
+                <span>Total products</span>
+                <strong>{inventoryProducts.length}</strong>
+              </div>
+              <div className="line">
+                <span>Active products</span>
+                <strong>{activeProducts.length}</strong>
+              </div>
+              <div className="line">
+                <span>Low-stock products</span>
+                <strong className={lowStockProducts.length > 0 ? "status-voided" : "status-active"}>
+                  {lowStockProducts.length}
+                </strong>
+              </div>
+              <div className="line">
+                <span>Inventory value</span>
+                <strong>{money(inventoryValue)}</strong>
+              </div>
+            </div>
+
+            <div className="card">
+              <h2>Add Product</h2>
+
+              <form onSubmit={addProduct} className="form-stack">
+                <label>
+                  Product name
+                  <input
+                    value={newProduct.name}
+                    onChange={(event) => setNewProduct({ ...newProduct, name: event.target.value })}
+                    placeholder="Example: Tequila"
+                  />
+                </label>
+
+                <label>
+                  Category
+                  <input
+                    value={newProduct.category}
+                    onChange={(event) =>
+                      setNewProduct({ ...newProduct, category: event.target.value })
+                    }
+                    placeholder="Example: Alcohol"
+                  />
+                </label>
+
+                <label>
+                  Unit
+                  <input
+                    value={newProduct.unit}
+                    onChange={(event) => setNewProduct({ ...newProduct, unit: event.target.value })}
+                    placeholder="ml, L, bottle, kg, portion, unit"
+                  />
+                </label>
+
+                <label>
+                  Current stock
+                  <input
+                    value={newProduct.stock}
+                    onChange={(event) => setNewProduct({ ...newProduct, stock: event.target.value })}
+                    type="number"
+                    step="0.001"
+                    placeholder="Example: 5000"
+                  />
+                </label>
+
+                <label>
+                  Reorder point
+                  <input
+                    value={newProduct.reorderPoint}
+                    onChange={(event) =>
+                      setNewProduct({ ...newProduct, reorderPoint: event.target.value })
+                    }
+                    type="number"
+                    step="0.001"
+                    placeholder="Example: 1000"
+                  />
+                </label>
+
+                <label>
+                  Cost per unit
+                  <input
+                    value={newProduct.costPerUnit}
+                    onChange={(event) =>
+                      setNewProduct({ ...newProduct, costPerUnit: event.target.value })
+                    }
+                    type="number"
+                    step="0.001"
+                    placeholder="Example: 0.018"
+                  />
+                </label>
+
+                <label>
+                  Supplier
+                  <input
+                    value={newProduct.supplier}
+                    onChange={(event) =>
+                      setNewProduct({ ...newProduct, supplier: event.target.value })
+                    }
+                    placeholder="Example: Spirits Supplier"
+                  />
+                </label>
+
+                <button className="primary" type="submit">
+                  Add Product
+                </button>
+              </form>
+            </div>
+
+            <div className="card">
+              <h2>Receive Stock / Product Arrivals</h2>
+              <p className="muted">
+                Use this when products arrive from suppliers. This adds quantity to stock and records a delivery movement.
+              </p>
+
+              <form onSubmit={receiveStock} className="form-stack">
+                <label>
+                  Product
+                  <select
+                    value={deliveryForm.productId}
+                    onChange={(event) =>
+                      setDeliveryForm({ ...deliveryForm, productId: event.target.value })
+                    }
+                  >
+                    {inventoryProducts.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} — current {numberText(product.stock)} {product.unit}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Quantity received
+                  <input
+                    value={deliveryForm.quantity}
+                    onChange={(event) =>
+                      setDeliveryForm({ ...deliveryForm, quantity: event.target.value })
+                    }
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    placeholder="Example: 12"
+                  />
+                </label>
+
+                <label>
+                  Unit cost
+                  <input
+                    value={deliveryForm.unitCost}
+                    onChange={(event) =>
+                      setDeliveryForm({ ...deliveryForm, unitCost: event.target.value })
+                    }
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    placeholder="Optional"
+                  />
+                </label>
+
+                <label>
+                  Supplier
+                  <input
+                    value={deliveryForm.supplier}
+                    onChange={(event) =>
+                      setDeliveryForm({ ...deliveryForm, supplier: event.target.value })
+                    }
+                    placeholder="Supplier name"
+                  />
+                </label>
+
+                <label>
+                  Invoice / reference
+                  <input
+                    value={deliveryForm.reference}
+                    onChange={(event) =>
+                      setDeliveryForm({ ...deliveryForm, reference: event.target.value })
+                    }
+                    placeholder="Example: INV-10045"
+                  />
+                </label>
+
+                <label>
+                  Note
+                  <textarea
+                    value={deliveryForm.note}
+                    onChange={(event) => setDeliveryForm({ ...deliveryForm, note: event.target.value })}
+                    placeholder="Optional delivery note"
+                    rows={3}
+                  />
+                </label>
+
+                <button className="primary" type="submit">
+                  Add to Stock
+                </button>
+              </form>
+            </div>
+
+            <div className="card">
+              <h2>Waste / Spillage</h2>
+
+              <form onSubmit={recordWaste} className="form-stack">
+                <label>
+                  Product
+                  <select
+                    value={wasteForm.productId}
+                    onChange={(event) =>
+                      setWasteForm({ ...wasteForm, productId: event.target.value })
+                    }
+                  >
+                    {inventoryProducts.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} — current {numberText(product.stock)} {product.unit}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Quantity wasted/spilled
+                  <input
+                    value={wasteForm.quantity}
+                    onChange={(event) =>
+                      setWasteForm({ ...wasteForm, quantity: event.target.value })
+                    }
+                    type="number"
+                    min="0"
+                    step="0.001"
+                  />
+                </label>
+
+                <label>
+                  Reason / note
+                  <textarea
+                    value={wasteForm.note}
+                    onChange={(event) => setWasteForm({ ...wasteForm, note: event.target.value })}
+                    placeholder="Example: broken bottle, over-pour, expired stock"
+                    rows={3}
+                  />
+                </label>
+
+                <button className="danger" type="submit">
+                  Record Waste
+                </button>
+              </form>
+            </div>
+
+            <div className="card">
+              <h2>Manual Stock Adjustment</h2>
+              <p className="muted">
+                Use positive quantity to add stock. Use negative quantity to reduce stock.
+              </p>
+
+              <form onSubmit={recordAdjustment} className="form-stack">
+                <label>
+                  Product
+                  <select
+                    value={adjustmentForm.productId}
+                    onChange={(event) =>
+                      setAdjustmentForm({ ...adjustmentForm, productId: event.target.value })
+                    }
+                  >
+                    {inventoryProducts.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} — current {numberText(product.stock)} {product.unit}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Adjustment quantity
+                  <input
+                    value={adjustmentForm.quantity}
+                    onChange={(event) =>
+                      setAdjustmentForm({ ...adjustmentForm, quantity: event.target.value })
+                    }
+                    type="number"
+                    step="0.001"
+                    placeholder="Example: 5 or -5"
+                  />
+                </label>
+
+                <label>
+                  Reason / note
+                  <textarea
+                    value={adjustmentForm.note}
+                    onChange={(event) =>
+                      setAdjustmentForm({ ...adjustmentForm, note: event.target.value })
+                    }
+                    placeholder="Example: stock count correction"
+                    rows={3}
+                  />
+                </label>
+
+                <button className="secondary" type="submit">
+                  Save Adjustment
+                </button>
+              </form>
+            </div>
+
+            <div className="card">
+              <h2>Recipe Setup</h2>
+              <p className="muted">
+                Link menu items to stock products. When the menu item is sold, stock is deducted automatically.
+              </p>
+
+              <form onSubmit={addRecipeItem} className="form-stack">
+                <label>
+                  Menu item
+                  <select
+                    value={recipeForm.menuItemId}
+                    onChange={(event) =>
+                      setRecipeForm({ ...recipeForm, menuItemId: event.target.value })
+                    }
+                  >
+                    {menuItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Stock product
+                  <select
+                    value={recipeForm.productId}
+                    onChange={(event) =>
+                      setRecipeForm({ ...recipeForm, productId: event.target.value })
+                    }
+                  >
+                    {inventoryProducts.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} — {product.unit}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Quantity used per sale
+                  <input
+                    value={recipeForm.quantity}
+                    onChange={(event) =>
+                      setRecipeForm({ ...recipeForm, quantity: event.target.value })
+                    }
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    placeholder="Example: 50 for 50ml"
+                  />
+                </label>
+
+                <button className="primary" type="submit">
+                  Save Recipe Line
+                </button>
+              </form>
+            </div>
+
+            <div className="card full-width">
+              <h2>Current Stock</h2>
+
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th>Supplier</th>
+                    <th>Stock</th>
+                    <th>Reorder</th>
+                    <th>Unit cost</th>
+                    <th>Value</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {inventoryProducts.map((product) => {
+                    const isLow = product.active && product.stock <= product.reorderPoint;
+
+                    return (
+                      <tr key={product.id}>
+                        <td>
+                          <input
+                            value={product.name}
+                            onChange={(event) => updateProduct(product.id, { name: event.target.value })}
+                          />
+                          <div className="muted">{product.unit}</div>
+                        </td>
+                        <td>
+                          <input
+                            value={product.category}
+                            onChange={(event) =>
+                              updateProduct(product.id, { category: event.target.value })
+                            }
+                          />
+                        </td>
+                        <td>
+                          <input
+                            value={product.supplier}
+                            onChange={(event) =>
+                              updateProduct(product.id, { supplier: event.target.value })
+                            }
+                          />
+                        </td>
+                        <td>
+                          <strong className={isLow ? "status-voided" : "status-paid"}>
+                            {numberText(product.stock)} {product.unit}
+                          </strong>
+                        </td>
+                        <td>
+                          <input
+                            value={product.reorderPoint}
+                            onChange={(event) =>
+                              updateProduct(product.id, {
+                                reorderPoint: Math.max(Number(event.target.value) || 0, 0)
+                              })
+                            }
+                            type="number"
+                            min="0"
+                            step="0.001"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            value={product.costPerUnit}
+                            onChange={(event) =>
+                              updateProduct(product.id, {
+                                costPerUnit: Math.max(Number(event.target.value) || 0, 0)
+                              })
+                            }
+                            type="number"
+                            min="0"
+                            step="0.001"
+                          />
+                        </td>
+                        <td>
+                          <strong>{money(product.stock * product.costPerUnit)}</strong>
+                        </td>
+                        <td>
+                          {isLow ? (
+                            <strong className="status-voided">Low stock</strong>
+                          ) : (
+                            <strong className="status-active">
+                              {product.active ? "OK" : "Inactive"}
+                            </strong>
+                          )}
+                        </td>
+                        <td>
+                          <button className="secondary" type="button" onClick={() => toggleProduct(product.id)}>
+                            {product.active ? "Deactivate" : "Activate"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="card full-width">
+              <h2>Recipe Links</h2>
+
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Menu item</th>
+                    <th>Stock product</th>
+                    <th>Quantity per sale</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {recipes.map((recipe) => {
+                    const product = getProduct(recipe.productId);
+
+                    return (
+                      <tr key={recipe.id}>
+                        <td>{getMenuItemName(recipe.menuItemId)}</td>
+                        <td>{product?.name || "Unknown product"}</td>
+                        <td>
+                          {numberText(recipe.quantity)} {product?.unit || ""}
+                        </td>
+                        <td>
+                          <button
+                            className="danger small"
+                            type="button"
+                            onClick={() => deleteRecipeItem(recipe.id)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {recipes.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="muted">
+                        No recipe links yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="card full-width">
+              <h2>Recent Stock Movements</h2>
+
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Product</th>
+                    <th>Type</th>
+                    <th>Quantity</th>
+                    <th>Supplier</th>
+                    <th>Reference</th>
+                    <th>Note</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {stockMovements.slice(0, 60).map((movement) => {
+                    const product = getProduct(movement.productId);
+                    const quantityClass = movement.signedQuantity >= 0 ? "status-active" : "status-voided";
+
+                    return (
+                      <tr key={movement.id}>
+                        <td>{new Date(movement.createdAt).toLocaleString()}</td>
+                        <td>{movement.productNameSnapshot}</td>
+                        <td>{movementLabel(movement.type)}</td>
+                        <td>
+                          <strong className={quantityClass}>
+                            {movement.signedQuantity > 0 ? "+" : ""}
+                            {numberText(movement.signedQuantity)} {product?.unit || ""}
+                          </strong>
+                        </td>
+                        <td>{movement.supplier || "-"}</td>
+                        <td>{movement.reference || "-"}</td>
+                        <td>{movement.note || "-"}</td>
+                      </tr>
+                    );
+                  })}
+
+                  {stockMovements.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="muted">
+                        No stock movements yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {view === "admin" && (
           <div className="grid grid-2" style={{ marginTop: 16 }}>
             <div className="card">
@@ -1428,16 +2581,16 @@ export default function HomePage() {
                 <strong>{openTabs.length}</strong>
               </div>
               <div className="line">
-                <span>Menu items</span>
-                <strong>{menuItems.length}</strong>
+                <span>Inventory value</span>
+                <strong>{money(inventoryValue)}</strong>
+              </div>
+              <div className="line">
+                <span>Low-stock products</span>
+                <strong>{lowStockProducts.length}</strong>
               </div>
               <div className="line">
                 <span>Active users</span>
                 <strong>{activeUsers.length}</strong>
-              </div>
-              <div className="line">
-                <span>Tables</span>
-                <strong>{tables.length}</strong>
               </div>
 
               <div className="button-row">
@@ -1466,12 +2619,12 @@ export default function HomePage() {
                 <strong className="status-active">Live</strong>
               </div>
               <div className="line">
-                <span>Product / inventory module</span>
-                <strong>Next</strong>
+                <span>Products / stock</span>
+                <strong className="status-active">Live</strong>
               </div>
               <div className="line">
                 <span>Database + login</span>
-                <strong>After product module</strong>
+                <strong>Next major phase</strong>
               </div>
             </div>
 
@@ -1697,6 +2850,27 @@ export default function HomePage() {
             </div>
 
             <div className="card">
+              <h2>Inventory Report</h2>
+
+              <div className="line">
+                <span>Inventory value</span>
+                <strong>{money(inventoryValue)}</strong>
+              </div>
+              <div className="line">
+                <span>Low-stock products</span>
+                <strong>{lowStockProducts.length}</strong>
+              </div>
+              <div className="line">
+                <span>Stock movements</span>
+                <strong>{stockMovements.length}</strong>
+              </div>
+              <div className="line">
+                <span>Recipe links</span>
+                <strong>{recipes.length}</strong>
+              </div>
+            </div>
+
+            <div className="card">
               <h2>Sales by Category</h2>
 
               {salesByCategory.length === 0 && <p className="muted">No sales yet.</p>}
@@ -1722,23 +2896,6 @@ export default function HomePage() {
                   <strong>{money(row.amount)}</strong>
                 </div>
               ))}
-            </div>
-
-            <div className="card">
-              <h2>Tabs Report</h2>
-
-              <div className="line">
-                <span>Open tabs</span>
-                <strong>{openTabs.length}</strong>
-              </div>
-              <div className="line">
-                <span>Closed tabs</span>
-                <strong>{closedTabs.length}</strong>
-              </div>
-              <div className="line">
-                <span>Open tab value</span>
-                <strong>{money(openTabValue)}</strong>
-              </div>
             </div>
 
             <div className="card full-width">
@@ -1808,6 +2965,12 @@ export default function HomePage() {
             {openTabs.length > 0 && (
               <div className="warning">
                 You have {openTabs.length} open tab(s). Close all tabs before daily closing.
+              </div>
+            )}
+
+            {lowStockProducts.length > 0 && (
+              <div className="warning">
+                {lowStockProducts.length} product(s) are low stock. Check Products / Stock before ordering.
               </div>
             )}
 
