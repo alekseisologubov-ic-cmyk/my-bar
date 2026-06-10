@@ -147,6 +147,18 @@ useEffect(() => {
     );
   }
 
+  if (!loaded) {
+  return (
+    <main>
+      <header className="header">
+        <div className="container">
+          <h1>My Bar POS</h1>
+          <p>Loading...</p>
+        </div>
+      </header>
+    </main>
+  );
+}
   return (
     <main>
       <header className="header">
