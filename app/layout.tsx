@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "My Bar POS",
-  description: "Bar operations, sales, daily closing, and basic POS system",
+  description: "Bar operations POS system"
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
