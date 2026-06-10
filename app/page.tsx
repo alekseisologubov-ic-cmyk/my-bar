@@ -2,8 +2,34 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-type View = "dashboard" | "pos" | "menu" | "reports" | "closing";
+type View =
+  | "dashboard"
+  | "pos"
+  | "tabs"
+  | "menu"
+  | "admin"
+  | "users"
+  | "reports"
+  | "closing";
+
 type PaymentMethod = "cash" | "card" | "mobile";
+type UserRole = "Admin" | "Manager" | "Bartender" | "Waiter";
+type TabType = "bar" | "table";
+type OrderStatus = "paid" | "voided";
+
+type StaffUser = {
+  id: string;
+  name: string;
+  role: UserRole;
+  active: boolean;
+};
+
+type VenueTable = {
+  id: string;
+  name: string;
+  seats: number;
+  active: boolean;
+};
 
 type MenuItem = {
   id: string;
@@ -14,25 +40,64 @@ type MenuItem = {
 };
 
 type CartItem = {
-  id: string;
+  itemId: string;
   name: string;
   category: string;
   price: number;
   quantity: number;
 };
 
+type CustomerTab = {
+  id: string;
+  name: string;
+  type: TabType;
+  tableId?: string;
+  customerName: string;
+  staffUserId: string;
+  openedAt: string;
+  closedAt?: string;
+  status: "open" | "closed";
+  items: CartItem[];
+};
+
 type Order = {
   id: string;
   number: number;
   createdAt: string;
+  source: "quick" | "tab";
+  tabName?: string;
+  staffUserId: string;
   items: CartItem[];
   subtotal: number;
+  discount: number;
   tip: number;
   total: number;
   paymentMethod: PaymentMethod;
+  status: OrderStatus;
 };
 
-const STORAGE_KEY = "my-bar-pos-v2";
+type TabCloseForm = {
+  paymentMethod: PaymentMethod;
+  tip: string;
+  discount: string;
+};
+
+const STORAGE_KEY = "my-bar-pos-v3";
+
+const DEFAULT_USERS: StaffUser[] = [
+  { id: "user-owner", name: "Owner", role: "Admin", active: true },
+  { id: "user-sofia", name: "Sofia", role: "Manager", active: true },
+  { id: "user-maria", name: "Maria", role: "Bartender", active: true },
+  { id: "user-james", name: "James", role: "Waiter", active: true }
+];
+
+const DEFAULT_TABLES: VenueTable[] = [
+  { id: "table-bar", name: "Bar", seats: 8, active: true },
+  { id: "table-1", name: "Table 1", seats: 2, active: true },
+  { id: "table-2", name: "Table 2", seats: 4, active: true },
+  { id: "table-3", name: "Table 3", seats: 4, active: true },
+  { id: "table-4", name: "Table 4", seats: 6, active: true }
+];
 
 const DEFAULT_MENU: MenuItem[] = [
   { id: "draft-beer", name: "Draft Beer", category: "Beer", price: 5.5, active: true },
@@ -63,23 +128,78 @@ function paymentLabel(method: PaymentMethod) {
   return "Mobile Pay";
 }
 
+function calculateSubtotal(items: CartItem[]) {
+  return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+}
+
+function mergeItems(existingItems: CartItem[], incomingItems: CartItem[]) {
+  const merged = [...existingItems];
+
+  incomingItems.forEach((incoming) => {
+    const existing = merged.find((item) => item.itemId === incoming.itemId);
+
+    if (existing) {
+      existing.quantity += incoming.quantity;
+    } else {
+      merged.push({ ...incoming });
+    }
+  });
+
+  return merged;
+}
+
+function defaultTabCloseForm(): TabCloseForm {
+  return {
+    paymentMethod: "card",
+    tip: "0",
+    discount: "0"
+  };
+}
+
 export default function HomePage() {
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState<View>("dashboard");
 
   const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_MENU);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [users, setUsers] = useState<StaffUser[]>(DEFAULT_USERS);
+  const [tables, setTables] = useState<VenueTable[]>(DEFAULT_TABLES);
+  const [tabs, setTabs] = useState<CustomerTab[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
 
+  const [currentStaffUserId, setCurrentStaffUserId] = useState(DEFAULT_USERS[2].id);
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [tip, setTip] = useState("0");
+  const [selectedTabTarget, setSelectedTabTarget] = useState("quick");
+
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+  const [tip, setTip] = useState("0");
+  const [discount, setDiscount] = useState("0");
   const [cashCounted, setCashCounted] = useState("");
+
+  const [tabCloseForms, setTabCloseForms] = useState<Record<string, TabCloseForm>>({});
 
   const [newItem, setNewItem] = useState({
     name: "",
     category: "Cocktails",
     price: ""
+  });
+
+  const [newUser, setNewUser] = useState({
+    name: "",
+    role: "Waiter" as UserRole
+  });
+
+  const [newTable, setNewTable] = useState({
+    name: "",
+    seats: "2"
+  });
+
+  const [newTab, setNewTab] = useState({
+    type: "bar" as TabType,
+    tableId: "table-1",
+    name: "",
+    customerName: "",
+    staffUserId: DEFAULT_USERS[2].id
   });
 
   useEffect(() => {
@@ -89,16 +209,17 @@ export default function HomePage() {
       try {
         const parsed = JSON.parse(saved) as {
           menuItems?: MenuItem[];
+          users?: StaffUser[];
+          tables?: VenueTable[];
+          tabs?: CustomerTab[];
           orders?: Order[];
         };
 
-        if (Array.isArray(parsed.menuItems)) {
-          setMenuItems(parsed.menuItems);
-        }
-
-        if (Array.isArray(parsed.orders)) {
-          setOrders(parsed.orders);
-        }
+        if (Array.isArray(parsed.menuItems)) setMenuItems(parsed.menuItems);
+        if (Array.isArray(parsed.users)) setUsers(parsed.users);
+        if (Array.isArray(parsed.tables)) setTables(parsed.tables);
+        if (Array.isArray(parsed.tabs)) setTabs(parsed.tabs);
+        if (Array.isArray(parsed.orders)) setOrders(parsed.orders);
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
       }
@@ -114,10 +235,28 @@ export default function HomePage() {
       STORAGE_KEY,
       JSON.stringify({
         menuItems,
+        users,
+        tables,
+        tabs,
         orders
       })
     );
-  }, [loaded, menuItems, orders]);
+  }, [loaded, menuItems, users, tables, tabs, orders]);
+
+  useEffect(() => {
+    if (selectedTabTarget === "quick") return;
+
+    const tabExists = tabs.some((tab) => tab.id === selectedTabTarget && tab.status === "open");
+
+    if (!tabExists) {
+      setSelectedTabTarget("quick");
+    }
+  }, [selectedTabTarget, tabs]);
+
+  const activeUsers = users.filter((user) => user.active);
+  const activeTables = tables.filter((table) => table.active);
+  const openTabs = tabs.filter((tab) => tab.status === "open");
+  const closedTabs = tabs.filter((tab) => tab.status === "closed");
 
   const categories = useMemo(() => {
     const uniqueCategories = new Set<string>();
@@ -137,32 +276,35 @@ export default function HomePage() {
       .filter((item) => selectedCategory === "All" || item.category === selectedCategory);
   }, [menuItems, selectedCategory]);
 
-  const subtotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  }, [cart]);
-
+  const subtotal = useMemo(() => calculateSubtotal(cart), [cart]);
+  const discountAmount = Math.min(Math.max(Number(discount) || 0, 0), subtotal);
   const tipAmount = Math.max(Number(tip) || 0, 0);
-  const total = subtotal + tipAmount;
+  const total = Math.max(subtotal - discountAmount + tipAmount, 0);
 
-  const salesTotal = orders.reduce((sum, order) => sum + order.total, 0);
-  const tipsTotal = orders.reduce((sum, order) => sum + order.tip, 0);
+  const paidOrders = orders.filter((order) => order.status === "paid");
 
-  const cashTotal = orders
+  const salesTotal = paidOrders.reduce((sum, order) => sum + order.total, 0);
+  const tipsTotal = paidOrders.reduce((sum, order) => sum + order.tip, 0);
+  const discountsTotal = paidOrders.reduce((sum, order) => sum + order.discount, 0);
+
+  const cashTotal = paidOrders
     .filter((order) => order.paymentMethod === "cash")
     .reduce((sum, order) => sum + order.total, 0);
 
-  const cardTotal = orders
+  const cardTotal = paidOrders
     .filter((order) => order.paymentMethod === "card")
     .reduce((sum, order) => sum + order.total, 0);
 
-  const mobileTotal = orders
+  const mobileTotal = paidOrders
     .filter((order) => order.paymentMethod === "mobile")
     .reduce((sum, order) => sum + order.total, 0);
+
+  const openTabValue = openTabs.reduce((sum, tab) => sum + calculateSubtotal(tab.items), 0);
 
   const salesByCategory = useMemo(() => {
     const totals = new Map<string, number>();
 
-    orders.forEach((order) => {
+    paidOrders.forEach((order) => {
       order.items.forEach((item) => {
         const current = totals.get(item.category) || 0;
         totals.set(item.category, current + item.price * item.quantity);
@@ -172,17 +314,42 @@ export default function HomePage() {
     return Array.from(totals.entries())
       .map(([category, amount]) => ({ category, amount }))
       .sort((a, b) => b.amount - a.amount);
-  }, [orders]);
+  }, [paidOrders]);
+
+  const salesByStaff = useMemo(() => {
+    return users
+      .map((user) => {
+        const amount = paidOrders
+          .filter((order) => order.staffUserId === user.id)
+          .reduce((sum, order) => sum + order.total, 0);
+
+        return {
+          user,
+          amount
+        };
+      })
+      .filter((row) => row.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+  }, [paidOrders, users]);
+
+  function getUserName(userId: string) {
+    return users.find((user) => user.id === userId)?.name || "Unknown";
+  }
+
+  function getTableName(tableId?: string) {
+    if (!tableId) return "No table";
+    return tables.find((table) => table.id === tableId)?.name || "Unknown table";
+  }
 
   function addToCart(item: MenuItem) {
     if (!item.active) return;
 
     setCart((current) => {
-      const existing = current.find((cartItem) => cartItem.id === item.id);
+      const existing = current.find((cartItem) => cartItem.itemId === item.id);
 
       if (existing) {
         return current.map((cartItem) =>
-          cartItem.id === item.id
+          cartItem.itemId === item.id
             ? { ...cartItem, quantity: cartItem.quantity + 1 }
             : cartItem
         );
@@ -191,7 +358,7 @@ export default function HomePage() {
       return [
         ...current,
         {
-          id: item.id,
+          itemId: item.id,
           name: item.name,
           category: item.category,
           price: item.price,
@@ -203,16 +370,16 @@ export default function HomePage() {
 
   function updateCartQuantity(itemId: string, quantity: number) {
     if (quantity <= 0) {
-      setCart((current) => current.filter((item) => item.id !== itemId));
+      setCart((current) => current.filter((item) => item.itemId !== itemId));
       return;
     }
 
     setCart((current) =>
-      current.map((item) => (item.id === itemId ? { ...item, quantity } : item))
+      current.map((item) => (item.itemId === itemId ? { ...item, quantity } : item))
     );
   }
 
-  function completeSale() {
+  function completeQuickSale() {
     if (cart.length === 0) {
       alert("Add items first.");
       return;
@@ -222,18 +389,186 @@ export default function HomePage() {
       id: makeId("order"),
       number: orders.length + 1,
       createdAt: new Date().toISOString(),
+      source: "quick",
+      staffUserId: currentStaffUserId,
       items: cart,
       subtotal,
+      discount: discountAmount,
       tip: tipAmount,
       total,
-      paymentMethod
+      paymentMethod,
+      status: "paid"
     };
 
     setOrders((current) => [newOrder, ...current]);
     setCart([]);
     setTip("0");
+    setDiscount("0");
 
     alert(`Sale completed. Order #${newOrder.number}`);
+  }
+
+  function addCartToSelectedTab() {
+    if (cart.length === 0) {
+      alert("Add items first.");
+      return;
+    }
+
+    const tab = openTabs.find((openTab) => openTab.id === selectedTabTarget);
+
+    if (!tab) {
+      alert("Select an open tab first.");
+      return;
+    }
+
+    setTabs((current) =>
+      current.map((currentTab) =>
+        currentTab.id === tab.id
+          ? {
+              ...currentTab,
+              items: mergeItems(currentTab.items, cart)
+            }
+          : currentTab
+      )
+    );
+
+    setCart([]);
+    alert(`Items added to ${tab.name}.`);
+  }
+
+  function createTab(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const table = activeTables.find((venueTable) => venueTable.id === newTab.tableId);
+    const customerName = newTab.customerName.trim();
+
+    if (newTab.type === "table" && !table) {
+      alert("Select a table.");
+      return;
+    }
+
+    const fallbackName =
+      newTab.type === "table"
+        ? table?.name || `Table Tab ${openTabs.length + 1}`
+        : `Bar Tab ${openTabs.length + 1}`;
+
+    const tabName = newTab.name.trim() || customerName || fallbackName;
+
+    const tab: CustomerTab = {
+      id: makeId("tab"),
+      name: tabName,
+      type: newTab.type,
+      tableId: newTab.type === "table" ? newTab.tableId : undefined,
+      customerName,
+      staffUserId: newTab.staffUserId || currentStaffUserId,
+      openedAt: new Date().toISOString(),
+      status: "open",
+      items: []
+    };
+
+    setTabs((current) => [tab, ...current]);
+    setSelectedTabTarget(tab.id);
+
+    setNewTab({
+      type: "bar",
+      tableId: activeTables[0]?.id || "",
+      name: "",
+      customerName: "",
+      staffUserId: currentStaffUserId
+    });
+
+    setView("pos");
+  }
+
+  function updateTabItemQuantity(tabId: string, itemId: string, quantity: number) {
+    setTabs((current) =>
+      current.map((tab) => {
+        if (tab.id !== tabId) return tab;
+
+        if (quantity <= 0) {
+          return {
+            ...tab,
+            items: tab.items.filter((item) => item.itemId !== itemId)
+          };
+        }
+
+        return {
+          ...tab,
+          items: tab.items.map((item) =>
+            item.itemId === itemId ? { ...item, quantity } : item
+          )
+        };
+      })
+    );
+  }
+
+  function updateTabCloseForm(tabId: string, changes: Partial<TabCloseForm>) {
+    setTabCloseForms((current) => ({
+      ...current,
+      [tabId]: {
+        ...defaultTabCloseForm(),
+        ...(current[tabId] || {}),
+        ...changes
+      }
+    }));
+  }
+
+  function closeTab(tabId: string) {
+    const tab = openTabs.find((openTab) => openTab.id === tabId);
+
+    if (!tab) {
+      alert("Tab not found.");
+      return;
+    }
+
+    if (tab.items.length === 0) {
+      alert("This tab has no items.");
+      return;
+    }
+
+    const form = tabCloseForms[tabId] || defaultTabCloseForm();
+    const tabSubtotal = calculateSubtotal(tab.items);
+    const tabDiscount = Math.min(Math.max(Number(form.discount) || 0, 0), tabSubtotal);
+    const tabTip = Math.max(Number(form.tip) || 0, 0);
+    const tabTotal = Math.max(tabSubtotal - tabDiscount + tabTip, 0);
+
+    const newOrder: Order = {
+      id: makeId("order"),
+      number: orders.length + 1,
+      createdAt: new Date().toISOString(),
+      source: "tab",
+      tabName: tab.name,
+      staffUserId: tab.staffUserId,
+      items: tab.items,
+      subtotal: tabSubtotal,
+      discount: tabDiscount,
+      tip: tabTip,
+      total: tabTotal,
+      paymentMethod: form.paymentMethod,
+      status: "paid"
+    };
+
+    setOrders((current) => [newOrder, ...current]);
+
+    setTabs((current) =>
+      current.map((currentTab) =>
+        currentTab.id === tabId
+          ? {
+              ...currentTab,
+              status: "closed",
+              closedAt: new Date().toISOString()
+            }
+          : currentTab
+      )
+    );
+
+    setTabCloseForms((current) => {
+      const next = { ...current };
+      delete next[tabId];
+      return next;
+    });
+
+    alert(`${tab.name} closed. Order #${newOrder.number}`);
   }
 
   function addMenuItem(event: FormEvent<HTMLFormElement>) {
@@ -258,15 +593,16 @@ export default function HomePage() {
       return;
     }
 
-    const item: MenuItem = {
-      id: makeId("menu"),
-      name,
-      category,
-      price,
-      active: true
-    };
-
-    setMenuItems((current) => [...current, item]);
+    setMenuItems((current) => [
+      ...current,
+      {
+        id: makeId("menu"),
+        name,
+        category,
+        price,
+        active: true
+      }
+    ]);
 
     setNewItem({
       name: "",
@@ -290,15 +626,107 @@ export default function HomePage() {
   }
 
   function deleteMenuItem(itemId: string) {
-    const approved = confirm("Delete this menu item? Existing orders will keep their sale history.");
+    const approved = confirm("Delete this menu item? Existing orders keep their sale history.");
 
     if (!approved) return;
 
     setMenuItems((current) => current.filter((item) => item.id !== itemId));
-    setCart((current) => current.filter((item) => item.id !== itemId));
+    setCart((current) => current.filter((item) => item.itemId !== itemId));
+  }
+
+  function addUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const name = newUser.name.trim();
+
+    if (!name) {
+      alert("Enter user name.");
+      return;
+    }
+
+    setUsers((current) => [
+      ...current,
+      {
+        id: makeId("user"),
+        name,
+        role: newUser.role,
+        active: true
+      }
+    ]);
+
+    setNewUser({
+      name: "",
+      role: "Waiter"
+    });
+  }
+
+  function updateUser(userId: string, changes: Partial<StaffUser>) {
+    setUsers((current) =>
+      current.map((user) => (user.id === userId ? { ...user, ...changes } : user))
+    );
+  }
+
+  function toggleUser(userId: string) {
+    setUsers((current) =>
+      current.map((user) => (user.id === userId ? { ...user, active: !user.active } : user))
+    );
+  }
+
+  function addTable(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const name = newTable.name.trim();
+    const seats = Math.max(Number(newTable.seats) || 1, 1);
+
+    if (!name) {
+      alert("Enter table name.");
+      return;
+    }
+
+    setTables((current) => [
+      ...current,
+      {
+        id: makeId("table"),
+        name,
+        seats,
+        active: true
+      }
+    ]);
+
+    setNewTable({
+      name: "",
+      seats: "2"
+    });
+  }
+
+  function updateTable(tableId: string, changes: Partial<VenueTable>) {
+    setTables((current) =>
+      current.map((table) => (table.id === tableId ? { ...table, ...changes } : table))
+    );
+  }
+
+  function toggleTable(tableId: string) {
+    setTables((current) =>
+      current.map((table) => (table.id === tableId ? { ...table, active: !table.active } : table))
+    );
+  }
+
+  function voidOrder(orderId: string) {
+    const approved = confirm("Void this order? It will stay in reports but no longer count as paid sales.");
+
+    if (!approved) return;
+
+    setOrders((current) =>
+      current.map((order) => (order.id === orderId ? { ...order, status: "voided" } : order))
+    );
   }
 
   function closeDay() {
+    if (openTabs.length > 0) {
+      alert("Close all open tabs before daily closing.");
+      return;
+    }
+
     const counted = Number(cashCounted);
 
     if (!Number.isFinite(counted)) {
@@ -309,27 +737,61 @@ export default function HomePage() {
     alert(
       `Day closed.\n\nTotal sales: ${money(salesTotal)}\nCash expected: ${money(
         cashTotal
-      )}\nCash counted: ${money(counted)}\nCash difference: ${money(counted - cashTotal)}`
+      )}\nCash counted: ${money(counted)}\nCash difference: ${money(
+        counted - cashTotal
+      )}\nTips: ${money(tipsTotal)}`
     );
   }
 
+  function exportLocalData() {
+    const data = {
+      exportedAt: new Date().toISOString(),
+      menuItems,
+      users,
+      tables,
+      tabs,
+      orders
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json"
+    });
+
+    const url = URL.createObjectURL(blob);
+    const download = document.createElement("a");
+
+    download.href = url;
+    download.download = "my-bar-pos-export.json";
+    download.click();
+
+    URL.revokeObjectURL(url);
+  }
+
   function resetDemoData() {
-    const approved = confirm("Reset menu and orders? This removes local demo data in this browser.");
+    const approved = confirm("Reset all local demo data in this browser?");
 
     if (!approved) return;
 
     setMenuItems(DEFAULT_MENU);
+    setUsers(DEFAULT_USERS);
+    setTables(DEFAULT_TABLES);
+    setTabs([]);
     setOrders([]);
     setCart([]);
     setTip("0");
+    setDiscount("0");
     setCashCounted("");
+    setSelectedTabTarget("quick");
     window.localStorage.removeItem(STORAGE_KEY);
   }
 
   const navItems: { key: View; label: string }[] = [
     { key: "dashboard", label: "Dashboard" },
     { key: "pos", label: "POS" },
+    { key: "tabs", label: "Tables & Tabs" },
     { key: "menu", label: "Menu Setup" },
+    { key: "admin", label: "Admin" },
+    { key: "users", label: "Users" },
     { key: "reports", label: "Reports" },
     { key: "closing", label: "Daily Closing" }
   ];
@@ -352,7 +814,7 @@ export default function HomePage() {
       <header className="header">
         <div className="container">
           <h1>My Bar POS</h1>
-          <p>Phase 1: sales, menu setup, payments, tips, reports, and daily closing.</p>
+          <p>Phase 1: sales, menu setup, tables, tabs, users, admin, reports, and closing.</p>
 
           <nav className="nav">
             {navItems.map((item) => (
@@ -377,15 +839,15 @@ export default function HomePage() {
           </div>
           <div className="card">
             <div className="kpi-label">Orders</div>
-            <div className="kpi-value">{orders.length}</div>
+            <div className="kpi-value">{paidOrders.length}</div>
           </div>
           <div className="card">
-            <div className="kpi-label">Tips</div>
-            <div className="kpi-value">{money(tipsTotal)}</div>
+            <div className="kpi-label">Open Tabs</div>
+            <div className="kpi-value">{openTabs.length}</div>
           </div>
           <div className="card">
-            <div className="kpi-label">Menu Items</div>
-            <div className="kpi-value">{menuItems.length}</div>
+            <div className="kpi-label">Open Tab Value</div>
+            <div className="kpi-value">{money(openTabValue)}</div>
           </div>
         </div>
 
@@ -394,42 +856,41 @@ export default function HomePage() {
             <div className="card">
               <h2>Dashboard</h2>
               <p>
-                Your Vercel app is running. Use Menu Setup to add your own drinks and food,
-                then use POS to record test sales.
+                Your Vercel app is running with POS, menu setup, tables, bar tabs, users,
+                admin controls, reports, and daily closing.
               </p>
 
               <div className="button-row">
                 <button className="primary" type="button" onClick={() => setView("pos")}>
                   Open POS
                 </button>
-                <button className="secondary" type="button" onClick={() => setView("menu")}>
-                  Edit Menu
+                <button className="secondary" type="button" onClick={() => setView("tabs")}>
+                  Open Tabs
+                </button>
+                <button className="secondary" type="button" onClick={() => setView("admin")}>
+                  Admin Dashboard
                 </button>
               </div>
             </div>
 
             <div className="card">
-              <h2>Phase 1 Status</h2>
+              <h2>Today Snapshot</h2>
               <div className="line">
-                <span>Vercel deployment</span>
-                <strong>Live</strong>
+                <span>Cash</span>
+                <strong>{money(cashTotal)}</strong>
               </div>
               <div className="line">
-                <span>Menu setup</span>
-                <strong>Added</strong>
+                <span>Card</span>
+                <strong>{money(cardTotal)}</strong>
               </div>
               <div className="line">
-                <span>Data storage</span>
-                <strong>Browser local storage</strong>
+                <span>Mobile Pay</span>
+                <strong>{money(mobileTotal)}</strong>
               </div>
               <div className="line">
-                <span>Next phase</span>
-                <strong>Tabs / tables</strong>
+                <span>Tips</span>
+                <strong>{money(tipsTotal)}</strong>
               </div>
-
-              <button className="danger" type="button" onClick={resetDemoData}>
-                Reset Demo Data
-              </button>
             </div>
           </div>
         )}
@@ -438,6 +899,35 @@ export default function HomePage() {
           <div className="grid grid-2" style={{ marginTop: 16 }}>
             <div className="card">
               <h2>POS Menu</h2>
+
+              <label>
+                Staff member
+                <select
+                  value={currentStaffUserId}
+                  onChange={(event) => setCurrentStaffUserId(event.target.value)}
+                >
+                  {activeUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} — {user.role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Sale target
+                <select
+                  value={selectedTabTarget}
+                  onChange={(event) => setSelectedTabTarget(event.target.value)}
+                >
+                  <option value="quick">Quick paid sale</option>
+                  {openTabs.map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      Add to tab: {tab.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
               <div className="category-tabs">
                 {categories.map((category) => (
@@ -473,7 +963,7 @@ export default function HomePage() {
               {cart.length === 0 && <p className="muted">Cart is empty.</p>}
 
               {cart.map((item) => (
-                <div className="cart-line" key={item.id}>
+                <div className="cart-line" key={item.itemId}>
                   <div>
                     <strong>{item.name}</strong>
                     <div className="muted">
@@ -482,11 +972,11 @@ export default function HomePage() {
                   </div>
 
                   <div className="qty">
-                    <button type="button" onClick={() => updateCartQuantity(item.id, item.quantity - 1)}>
+                    <button type="button" onClick={() => updateCartQuantity(item.itemId, item.quantity - 1)}>
                       -
                     </button>
                     <strong>{item.quantity}</strong>
-                    <button type="button" onClick={() => updateCartQuantity(item.id, item.quantity + 1)}>
+                    <button type="button" onClick={() => updateCartQuantity(item.itemId, item.quantity + 1)}>
                       +
                     </button>
                   </div>
@@ -498,37 +988,279 @@ export default function HomePage() {
                 <strong>{money(subtotal)}</strong>
               </div>
 
-              <label>
-                Tip
-                <input
-                  value={tip}
-                  onChange={(event) => setTip(event.target.value)}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                />
-              </label>
+              {selectedTabTarget === "quick" && (
+                <>
+                  <label>
+                    Discount
+                    <input
+                      value={discount}
+                      onChange={(event) => setDiscount(event.target.value)}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                    />
+                  </label>
 
-              <label>
-                Payment method
-                <select
-                  value={paymentMethod}
-                  onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
-                >
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="mobile">Mobile Pay</option>
-                </select>
-              </label>
+                  <label>
+                    Tip
+                    <input
+                      value={tip}
+                      onChange={(event) => setTip(event.target.value)}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                    />
+                  </label>
 
-              <div className="line total-line">
-                <span>Total</span>
-                <strong>{money(total)}</strong>
+                  <label>
+                    Payment method
+                    <select
+                      value={paymentMethod}
+                      onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="card">Card</option>
+                      <option value="mobile">Mobile Pay</option>
+                    </select>
+                  </label>
+
+                  <div className="line total-line">
+                    <span>Total</span>
+                    <strong>{money(total)}</strong>
+                  </div>
+
+                  <button className="primary" onClick={completeQuickSale} type="button">
+                    Complete Sale
+                  </button>
+                </>
+              )}
+
+              {selectedTabTarget !== "quick" && (
+                <>
+                  <div className="notice">
+                    This order will be added to an open tab. Payment happens later when the tab is closed.
+                  </div>
+
+                  <button className="primary" onClick={addCartToSelectedTab} type="button">
+                    Add Items to Tab
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {view === "tabs" && (
+          <div className="grid grid-2" style={{ marginTop: 16 }}>
+            <div className="card">
+              <h2>Open New Table / Bar Tab</h2>
+
+              <form onSubmit={createTab} className="form-stack">
+                <label>
+                  Type
+                  <select
+                    value={newTab.type}
+                    onChange={(event) =>
+                      setNewTab({ ...newTab, type: event.target.value as TabType })
+                    }
+                  >
+                    <option value="bar">Bar Tab</option>
+                    <option value="table">Table</option>
+                  </select>
+                </label>
+
+                {newTab.type === "table" && (
+                  <label>
+                    Table
+                    <select
+                      value={newTab.tableId}
+                      onChange={(event) => setNewTab({ ...newTab, tableId: event.target.value })}
+                    >
+                      {activeTables.map((table) => (
+                        <option key={table.id} value={table.id}>
+                          {table.name} — {table.seats} seats
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                <label>
+                  Tab name
+                  <input
+                    value={newTab.name}
+                    onChange={(event) => setNewTab({ ...newTab, name: event.target.value })}
+                    placeholder="Example: Table 4 / John"
+                  />
+                </label>
+
+                <label>
+                  Customer name
+                  <input
+                    value={newTab.customerName}
+                    onChange={(event) =>
+                      setNewTab({ ...newTab, customerName: event.target.value })
+                    }
+                    placeholder="Optional"
+                  />
+                </label>
+
+                <label>
+                  Assigned staff
+                  <select
+                    value={newTab.staffUserId}
+                    onChange={(event) =>
+                      setNewTab({ ...newTab, staffUserId: event.target.value })
+                    }
+                  >
+                    {activeUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} — {user.role}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <button className="primary" type="submit">
+                  Open Tab
+                </button>
+              </form>
+            </div>
+
+            <div className="card">
+              <h2>Tabs Summary</h2>
+              <div className="line">
+                <span>Open tabs</span>
+                <strong>{openTabs.length}</strong>
               </div>
+              <div className="line">
+                <span>Closed tabs</span>
+                <strong>{closedTabs.length}</strong>
+              </div>
+              <div className="line">
+                <span>Open tab value</span>
+                <strong>{money(openTabValue)}</strong>
+              </div>
+              <div className="line">
+                <span>Tables active</span>
+                <strong>{activeTables.length}</strong>
+              </div>
+            </div>
 
-              <button className="primary" onClick={completeSale} type="button">
-                Complete Sale
-              </button>
+            <div className="card full-width">
+              <h2>Open Tabs</h2>
+
+              {openTabs.length === 0 && <p className="muted">No open tabs yet.</p>}
+
+              <div className="tab-grid">
+                {openTabs.map((tab) => {
+                  const form = tabCloseForms[tab.id] || defaultTabCloseForm();
+                  const tabSubtotal = calculateSubtotal(tab.items);
+                  const tabDiscount = Math.min(Math.max(Number(form.discount) || 0, 0), tabSubtotal);
+                  const tabTip = Math.max(Number(form.tip) || 0, 0);
+                  const tabTotal = Math.max(tabSubtotal - tabDiscount + tabTip, 0);
+
+                  return (
+                    <div className="tab-card" key={tab.id}>
+                      <div className="tab-header">
+                        <div>
+                          <h3>{tab.name}</h3>
+                          <p className="muted">
+                            {tab.type === "table" ? getTableName(tab.tableId) : "Bar tab"} · Staff:{" "}
+                            {getUserName(tab.staffUserId)}
+                          </p>
+                        </div>
+                        <span className="pill open">Open</span>
+                      </div>
+
+                      {tab.items.length === 0 && <p className="muted">No items yet.</p>}
+
+                      {tab.items.map((item) => (
+                        <div className="cart-line" key={item.itemId}>
+                          <div>
+                            <strong>{item.name}</strong>
+                            <div className="muted">
+                              {item.quantity} × {money(item.price)}
+                            </div>
+                          </div>
+
+                          <div className="qty">
+                            <button
+                              type="button"
+                              onClick={() => updateTabItemQuantity(tab.id, item.itemId, item.quantity - 1)}
+                            >
+                              -
+                            </button>
+                            <strong>{item.quantity}</strong>
+                            <button
+                              type="button"
+                              onClick={() => updateTabItemQuantity(tab.id, item.itemId, item.quantity + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="line">
+                        <span>Subtotal</span>
+                        <strong>{money(tabSubtotal)}</strong>
+                      </div>
+
+                      <label>
+                        Discount
+                        <input
+                          value={form.discount}
+                          onChange={(event) =>
+                            updateTabCloseForm(tab.id, { discount: event.target.value })
+                          }
+                          type="number"
+                          min="0"
+                          step="0.01"
+                        />
+                      </label>
+
+                      <label>
+                        Tip
+                        <input
+                          value={form.tip}
+                          onChange={(event) =>
+                            updateTabCloseForm(tab.id, { tip: event.target.value })
+                          }
+                          type="number"
+                          min="0"
+                          step="0.01"
+                        />
+                      </label>
+
+                      <label>
+                        Payment method
+                        <select
+                          value={form.paymentMethod}
+                          onChange={(event) =>
+                            updateTabCloseForm(tab.id, {
+                              paymentMethod: event.target.value as PaymentMethod
+                            })
+                          }
+                        >
+                          <option value="cash">Cash</option>
+                          <option value="card">Card</option>
+                          <option value="mobile">Mobile Pay</option>
+                        </select>
+                      </label>
+
+                      <div className="line total-line">
+                        <span>Total</span>
+                        <strong>{money(tabTotal)}</strong>
+                      </div>
+
+                      <button className="primary" type="button" onClick={() => closeTab(tab.id)}>
+                        Close Tab & Pay
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -552,7 +1284,9 @@ export default function HomePage() {
                   Category
                   <input
                     value={newItem.category}
-                    onChange={(event) => setNewItem({ ...newItem, category: event.target.value })}
+                    onChange={(event) =>
+                      setNewItem({ ...newItem, category: event.target.value })
+                    }
                     placeholder="Example: Cocktails"
                   />
                 </label>
@@ -627,7 +1361,9 @@ export default function HomePage() {
                       <td>
                         <input
                           value={item.category}
-                          onChange={(event) => updateMenuItem(item.id, { category: event.target.value })}
+                          onChange={(event) =>
+                            updateMenuItem(item.id, { category: event.target.value })
+                          }
                           aria-label="Item category"
                         />
                       </td>
@@ -635,7 +1371,9 @@ export default function HomePage() {
                         <input
                           value={item.price}
                           onChange={(event) =>
-                            updateMenuItem(item.id, { price: Math.max(Number(event.target.value) || 0, 0) })
+                            updateMenuItem(item.id, {
+                              price: Math.max(Number(event.target.value) || 0, 0)
+                            })
                           }
                           type="number"
                           min="0"
@@ -650,10 +1388,18 @@ export default function HomePage() {
                       </td>
                       <td>
                         <div className="table-actions">
-                          <button className="secondary" type="button" onClick={() => toggleMenuItem(item.id)}>
+                          <button
+                            className="secondary"
+                            type="button"
+                            onClick={() => toggleMenuItem(item.id)}
+                          >
                             {item.active ? "Deactivate" : "Activate"}
                           </button>
-                          <button className="danger small" type="button" onClick={() => deleteMenuItem(item.id)}>
+                          <button
+                            className="danger small"
+                            type="button"
+                            onClick={() => deleteMenuItem(item.id)}
+                          >
                             Delete
                           </button>
                         </div>
@@ -664,6 +1410,261 @@ export default function HomePage() {
               </table>
 
               {menuItems.length === 0 && <p className="muted">No menu items yet.</p>}
+            </div>
+          </div>
+        )}
+
+        {view === "admin" && (
+          <div className="grid grid-2" style={{ marginTop: 16 }}>
+            <div className="card">
+              <h2>Admin Dashboard</h2>
+
+              <div className="line">
+                <span>Total sales</span>
+                <strong>{money(salesTotal)}</strong>
+              </div>
+              <div className="line">
+                <span>Open tabs</span>
+                <strong>{openTabs.length}</strong>
+              </div>
+              <div className="line">
+                <span>Menu items</span>
+                <strong>{menuItems.length}</strong>
+              </div>
+              <div className="line">
+                <span>Active users</span>
+                <strong>{activeUsers.length}</strong>
+              </div>
+              <div className="line">
+                <span>Tables</span>
+                <strong>{tables.length}</strong>
+              </div>
+
+              <div className="button-row">
+                <button className="secondary" type="button" onClick={exportLocalData}>
+                  Export Local Data
+                </button>
+                <button className="danger" type="button" onClick={resetDemoData}>
+                  Reset Demo Data
+                </button>
+              </div>
+            </div>
+
+            <div className="card">
+              <h2>System Roadmap</h2>
+
+              <div className="line">
+                <span>POS</span>
+                <strong className="status-active">Live</strong>
+              </div>
+              <div className="line">
+                <span>Tables & tabs</span>
+                <strong className="status-active">Live</strong>
+              </div>
+              <div className="line">
+                <span>Users dashboard</span>
+                <strong className="status-active">Live</strong>
+              </div>
+              <div className="line">
+                <span>Product / inventory module</span>
+                <strong>Next</strong>
+              </div>
+              <div className="line">
+                <span>Database + login</span>
+                <strong>After product module</strong>
+              </div>
+            </div>
+
+            <div className="card full-width">
+              <h2>Table Setup</h2>
+
+              <form onSubmit={addTable} className="inline-form">
+                <input
+                  value={newTable.name}
+                  onChange={(event) => setNewTable({ ...newTable, name: event.target.value })}
+                  placeholder="Table name"
+                />
+                <input
+                  value={newTable.seats}
+                  onChange={(event) => setNewTable({ ...newTable, seats: event.target.value })}
+                  type="number"
+                  min="1"
+                  placeholder="Seats"
+                />
+                <button className="primary" type="submit">
+                  Add Table
+                </button>
+              </form>
+
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Table</th>
+                    <th>Seats</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {tables.map((table) => (
+                    <tr key={table.id}>
+                      <td>
+                        <input
+                          value={table.name}
+                          onChange={(event) => updateTable(table.id, { name: event.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          value={table.seats}
+                          onChange={(event) =>
+                            updateTable(table.id, {
+                              seats: Math.max(Number(event.target.value) || 1, 1)
+                            })
+                          }
+                          type="number"
+                          min="1"
+                        />
+                      </td>
+                      <td>
+                        <strong className={table.active ? "status-active" : "status-inactive"}>
+                          {table.active ? "Active" : "Inactive"}
+                        </strong>
+                      </td>
+                      <td>
+                        <button className="secondary" type="button" onClick={() => toggleTable(table.id)}>
+                          {table.active ? "Deactivate" : "Activate"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {view === "users" && (
+          <div className="grid grid-2" style={{ marginTop: 16 }}>
+            <div className="card">
+              <h2>Users Dashboard</h2>
+
+              <div className="line">
+                <span>Total users</span>
+                <strong>{users.length}</strong>
+              </div>
+              <div className="line">
+                <span>Active users</span>
+                <strong>{activeUsers.length}</strong>
+              </div>
+              <div className="line">
+                <span>Managers/Admins</span>
+                <strong>
+                  {users.filter((user) => user.role === "Admin" || user.role === "Manager").length}
+                </strong>
+              </div>
+              <div className="line">
+                <span>Bartenders/Waiters</span>
+                <strong>
+                  {users.filter((user) => user.role === "Bartender" || user.role === "Waiter").length}
+                </strong>
+              </div>
+            </div>
+
+            <div className="card">
+              <h2>Add User</h2>
+
+              <form onSubmit={addUser} className="form-stack">
+                <label>
+                  Name
+                  <input
+                    value={newUser.name}
+                    onChange={(event) => setNewUser({ ...newUser, name: event.target.value })}
+                    placeholder="Example: Alex"
+                  />
+                </label>
+
+                <label>
+                  Role
+                  <select
+                    value={newUser.role}
+                    onChange={(event) =>
+                      setNewUser({ ...newUser, role: event.target.value as UserRole })
+                    }
+                  >
+                    <option value="Admin">Admin</option>
+                    <option value="Manager">Manager</option>
+                    <option value="Bartender">Bartender</option>
+                    <option value="Waiter">Waiter</option>
+                  </select>
+                </label>
+
+                <button className="primary" type="submit">
+                  Add User
+                </button>
+              </form>
+            </div>
+
+            <div className="card full-width">
+              <h2>Current Users</h2>
+
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Sales</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {users.map((user) => {
+                    const userSales = paidOrders
+                      .filter((order) => order.staffUserId === user.id)
+                      .reduce((sum, order) => sum + order.total, 0);
+
+                    return (
+                      <tr key={user.id}>
+                        <td>
+                          <input
+                            value={user.name}
+                            onChange={(event) => updateUser(user.id, { name: event.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            value={user.role}
+                            onChange={(event) =>
+                              updateUser(user.id, { role: event.target.value as UserRole })
+                            }
+                          >
+                            <option value="Admin">Admin</option>
+                            <option value="Manager">Manager</option>
+                            <option value="Bartender">Bartender</option>
+                            <option value="Waiter">Waiter</option>
+                          </select>
+                        </td>
+                        <td>
+                          <strong className={user.active ? "status-active" : "status-inactive"}>
+                            {user.active ? "Active" : "Inactive"}
+                          </strong>
+                        </td>
+                        <td>
+                          <strong>{money(userSales)}</strong>
+                        </td>
+                        <td>
+                          <button className="secondary" type="button" onClick={() => toggleUser(user.id)}>
+                            {user.active ? "Deactivate" : "Activate"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -685,6 +1686,10 @@ export default function HomePage() {
                 <span>Mobile Pay</span>
                 <strong>{money(mobileTotal)}</strong>
               </div>
+              <div className="line">
+                <span>Discounts</span>
+                <strong>{money(discountsTotal)}</strong>
+              </div>
               <div className="line total-line">
                 <span>Total sales</span>
                 <strong>{money(salesTotal)}</strong>
@@ -704,6 +1709,38 @@ export default function HomePage() {
               ))}
             </div>
 
+            <div className="card">
+              <h2>Sales by Staff</h2>
+
+              {salesByStaff.length === 0 && <p className="muted">No staff sales yet.</p>}
+
+              {salesByStaff.map((row) => (
+                <div className="line" key={row.user.id}>
+                  <span>
+                    {row.user.name} — {row.user.role}
+                  </span>
+                  <strong>{money(row.amount)}</strong>
+                </div>
+              ))}
+            </div>
+
+            <div className="card">
+              <h2>Tabs Report</h2>
+
+              <div className="line">
+                <span>Open tabs</span>
+                <strong>{openTabs.length}</strong>
+              </div>
+              <div className="line">
+                <span>Closed tabs</span>
+                <strong>{closedTabs.length}</strong>
+              </div>
+              <div className="line">
+                <span>Open tab value</span>
+                <strong>{money(openTabValue)}</strong>
+              </div>
+            </div>
+
             <div className="card full-width">
               <h2>Recent Orders</h2>
 
@@ -712,10 +1749,13 @@ export default function HomePage() {
                   <tr>
                     <th>Order</th>
                     <th>Time</th>
+                    <th>Source</th>
+                    <th>Staff</th>
                     <th>Items</th>
                     <th>Payment</th>
-                    <th>Tip</th>
                     <th>Total</th>
+                    <th>Status</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
 
@@ -724,18 +1764,33 @@ export default function HomePage() {
                     <tr key={order.id}>
                       <td>#{order.number}</td>
                       <td>{new Date(order.createdAt).toLocaleTimeString()}</td>
+                      <td>{order.source === "tab" ? order.tabName || "Tab" : "Quick Sale"}</td>
+                      <td>{getUserName(order.staffUserId)}</td>
                       <td>{order.items.map((item) => `${item.quantity}x ${item.name}`).join(", ")}</td>
                       <td>{paymentLabel(order.paymentMethod)}</td>
-                      <td>{money(order.tip)}</td>
                       <td>
                         <strong>{money(order.total)}</strong>
+                      </td>
+                      <td>
+                        <strong className={order.status === "paid" ? "status-paid" : "status-voided"}>
+                          {order.status}
+                        </strong>
+                      </td>
+                      <td>
+                        {order.status === "paid" ? (
+                          <button className="danger small" type="button" onClick={() => voidOrder(order.id)}>
+                            Void
+                          </button>
+                        ) : (
+                          "-"
+                        )}
                       </td>
                     </tr>
                   ))}
 
                   {orders.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="muted">
+                      <td colSpan={9} className="muted">
                         No orders yet.
                       </td>
                     </tr>
@@ -749,6 +1804,12 @@ export default function HomePage() {
         {view === "closing" && (
           <div className="card" style={{ marginTop: 16 }}>
             <h2>Daily Closing</h2>
+
+            {openTabs.length > 0 && (
+              <div className="warning">
+                You have {openTabs.length} open tab(s). Close all tabs before daily closing.
+              </div>
+            )}
 
             <div className="line">
               <span>Total sales</span>
@@ -769,6 +1830,10 @@ export default function HomePage() {
             <div className="line">
               <span>Tips</span>
               <strong>{money(tipsTotal)}</strong>
+            </div>
+            <div className="line">
+              <span>Discounts</span>
+              <strong>{money(discountsTotal)}</strong>
             </div>
 
             <label>
