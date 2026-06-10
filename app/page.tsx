@@ -46,6 +46,27 @@ export default function HomePage() {
   const [view, setView] = useState<View>("dashboard");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const STORAGE_KEY = "my-bar-pos-orders-v1";
+const [loaded, setLoaded] = useState(false);
+
+useEffect(() => {
+  const savedOrders = window.localStorage.getItem(STORAGE_KEY);
+
+  if (savedOrders) {
+    try {
+      setOrders(JSON.parse(savedOrders));
+    } catch {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
+  }
+
+  setLoaded(true);
+}, []);
+
+useEffect(() => {
+  if (!loaded) return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+}, [loaded, orders]);
   const [tip, setTip] = useState("0");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [cashCounted, setCashCounted] = useState("");
