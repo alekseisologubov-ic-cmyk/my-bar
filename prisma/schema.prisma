@@ -1,0 +1,305 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  BARTENDER
+  WAITER
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+}
+
+enum OrderStatus {
+  OPEN
+  PAID
+  VOIDED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MOBILE
+}
+
+enum PaymentStatus {
+  RECORDED
+  REFUNDED
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+model Venue {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  currency  String   @default("EUR")
+  taxMode   String   @default("INCLUDED")
+  createdAt DateTime @default(now())
+
+  users         User[]
+  categories    MenuCategory[]
+  menuItems     MenuItem[]
+  tables        VenueTable[]
+  orders        Order[]
+  dailyClosings DailyClosing[]
+  auditLogs     AuditLog[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  venueId      String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(WAITER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  orders            Order[]        @relation("OrderStaff")
+  tips              Tip[]          @relation("TipStaff")
+  approvedDiscounts Discount[]     @relation("DiscountApprover")
+  approvedRefunds   Refund[]       @relation("RefundApprover")
+  approvedVoids     Void[]         @relation("VoidApprover")
+  dailyClosings     DailyClosing[] @relation("ClosingUser")
+  auditLogs         AuditLog[]
+
+  @@index([venueId])
+}
+
+model MenuCategory {
+  id        String   @id @default(cuid())
+  venueId   String
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  venue Venue      @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  items MenuItem[]
+
+  @@unique([venueId, name])
+  @@index([venueId])
+}
+
+model MenuItem {
+  id          String   @id @default(cuid())
+  venueId     String
+  categoryId  String
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  taxRate     Decimal  @default(20) @db.Decimal(5, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  venue      Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  category   MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  orderItems OrderItem[]
+
+  @@index([venueId, categoryId])
+}
+
+model VenueTable {
+  id        String      @id @default(cuid())
+  venueId   String
+  name      String
+  seats     Int         @default(2)
+  status    TableStatus @default(AVAILABLE)
+  createdAt DateTime    @default(now())
+
+  venue  Venue   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([venueId, name])
+  @@index([venueId])
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  orderNumber   Int         @unique @default(autoincrement())
+  venueId       String
+  tableId       String?
+  staffUserId   String
+  status        OrderStatus @default(OPEN)
+  subtotal      Decimal     @default(0) @db.Decimal(10, 2)
+  discountTotal Decimal     @default(0) @db.Decimal(10, 2)
+  taxTotal      Decimal     @default(0) @db.Decimal(10, 2)
+  total         Decimal     @default(0) @db.Decimal(10, 2)
+  notes         String?
+  openedAt      DateTime    @default(now())
+  closedAt      DateTime?
+
+  venue     Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  table     VenueTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  staffUser User        @relation("OrderStaff", fields: [staffUserId], references: [id], onDelete: Restrict)
+
+  items     OrderItem[]
+  payments  Payment[]
+  tips      Tip[]
+  discounts Discount[]
+  refunds   Refund[]
+  voids     Void[]
+
+  @@index([venueId, status])
+  @@index([staffUserId])
+  @@index([closedAt])
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  menuItemId    String
+  nameSnapshot  String
+  priceSnapshot Decimal  @db.Decimal(10, 2)
+  quantity      Int
+  lineTotal     Decimal  @db.Decimal(10, 2)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  voids    Void[]
+
+  @@index([orderId])
+  @@index([menuItemId])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  orderId   String
+  method    PaymentMethod
+  amount    Decimal       @db.Decimal(10, 2)
+  status    PaymentStatus @default(RECORDED)
+  paidAt    DateTime      @default(now())
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tips    Tip[]
+  refunds Refund[]
+
+  @@index([orderId])
+  @@index([method])
+  @@index([paidAt])
+}
+
+model Tip {
+  id          String   @id @default(cuid())
+  orderId     String
+  paymentId   String
+  staffUserId String
+  amount      Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  staffUser User    @relation("TipStaff", fields: [staffUserId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([staffUserId])
+}
+
+model Discount {
+  id               String       @id @default(cuid())
+  orderId          String
+  type             DiscountType
+  value            Decimal      @db.Decimal(10, 2)
+  amount           Decimal      @db.Decimal(10, 2)
+  reason           String
+  approvedByUserId String?
+  createdAt        DateTime     @default(now())
+
+  order      Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  approvedBy User? @relation("DiscountApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+}
+
+model Refund {
+  id               String   @id @default(cuid())
+  orderId          String
+  paymentId        String?
+  amount           Decimal  @db.Decimal(10, 2)
+  reason           String
+  approvedByUserId String?
+  createdAt        DateTime @default(now())
+
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payment    Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  approvedBy User?    @relation("RefundApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+}
+
+model Void {
+  id               String   @id @default(cuid())
+  orderId          String
+  orderItemId      String?
+  reason           String
+  approvedByUserId String?
+  createdAt        DateTime @default(now())
+
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem  OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  approvedBy User?      @relation("VoidApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+}
+
+model DailyClosing {
+  id             String   @id @default(cuid())
+  venueId        String
+  businessDate   DateTime
+  totalSales     Decimal  @default(0) @db.Decimal(10, 2)
+  cashExpected   Decimal  @default(0) @db.Decimal(10, 2)
+  cashCounted    Decimal  @default(0) @db.Decimal(10, 2)
+  cashDifference Decimal  @default(0) @db.Decimal(10, 2)
+  cardTotal      Decimal  @default(0) @db.Decimal(10, 2)
+  mobileTotal    Decimal  @default(0) @db.Decimal(10, 2)
+  tipsTotal      Decimal  @default(0) @db.Decimal(10, 2)
+  refundsTotal   Decimal  @default(0) @db.Decimal(10, 2)
+  voidsTotal     Decimal  @default(0) @db.Decimal(10, 2)
+  discountsTotal Decimal  @default(0) @db.Decimal(10, 2)
+  notes          String?
+  closedByUserId String
+  closedAt       DateTime @default(now())
+
+  venue    Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  closedBy User  @relation("ClosingUser", fields: [closedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([venueId, businessDate])
+  @@index([closedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  venueId    String
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  createdAt  DateTime @default(now())
+
+  venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([venueId, action])
+  @@index([createdAt])
+}
