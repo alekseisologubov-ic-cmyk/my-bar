@@ -39,6 +39,7 @@ type MenuItem = {
   category: string;
   price: number;
   active: boolean;
+  recipeId?: string;
 };
 
 type CartItem = {
@@ -90,6 +91,21 @@ type InventoryProduct = {
   active: boolean;
 };
 
+type Recipe = {
+  id: string;
+  name: string;
+  category: string;
+  instructions: string;
+  active: boolean;
+};
+
+type RecipeIngredient = {
+  id: string;
+  recipeId: string;
+  productId: string;
+  quantity: number;
+};
+
 type StockMovement = {
   id: string;
   productId: string;
@@ -103,20 +119,13 @@ type StockMovement = {
   createdAt: string;
 };
 
-type RecipeItem = {
-  id: string;
-  menuItemId: string;
-  productId: string;
-  quantity: number;
-};
-
 type TabCloseForm = {
   paymentMethod: PaymentMethod;
   tip: string;
   discount: string;
 };
 
-const STORAGE_KEY = "my-bar-pos-v4";
+const STORAGE_KEY = "my-bar-pos-v5";
 
 const DEFAULT_USERS: StaffUser[] = [
   { id: "user-owner", name: "Owner", role: "Admin", active: true },
@@ -131,18 +140,6 @@ const DEFAULT_TABLES: VenueTable[] = [
   { id: "table-2", name: "Table 2", seats: 4, active: true },
   { id: "table-3", name: "Table 3", seats: 4, active: true },
   { id: "table-4", name: "Table 4", seats: 6, active: true }
-];
-
-const DEFAULT_MENU: MenuItem[] = [
-  { id: "draft-beer", name: "Draft Beer", category: "Beer", price: 5.5, active: true },
-  { id: "bottle-beer", name: "Bottle Beer", category: "Beer", price: 6, active: true },
-  { id: "mojito", name: "Mojito", category: "Cocktails", price: 9.5, active: true },
-  { id: "old-fashioned", name: "Old Fashioned", category: "Cocktails", price: 11, active: true },
-  { id: "vodka-soda", name: "Vodka Soda", category: "Spirits", price: 8, active: true },
-  { id: "cola", name: "Cola", category: "Soft Drinks", price: 3, active: true },
-  { id: "sparkling-water", name: "Sparkling Water", category: "Soft Drinks", price: 2.8, active: true },
-  { id: "fries", name: "Fries", category: "Food", price: 5, active: true },
-  { id: "burger", name: "Burger", category: "Food", price: 13, active: true }
 ];
 
 const DEFAULT_PRODUCTS: InventoryProduct[] = [
@@ -247,16 +244,202 @@ const DEFAULT_PRODUCTS: InventoryProduct[] = [
   }
 ];
 
-const DEFAULT_RECIPES: RecipeItem[] = [
-  { id: "recipe-draft-beer-lager", menuItemId: "draft-beer", productId: "product-lager-keg", quantity: 0.5 },
-  { id: "recipe-bottle-beer", menuItemId: "bottle-beer", productId: "product-bottle-beer", quantity: 1 },
-  { id: "recipe-mojito-rum", menuItemId: "mojito", productId: "product-white-rum", quantity: 50 },
-  { id: "recipe-old-fashioned-bourbon", menuItemId: "old-fashioned", productId: "product-bourbon", quantity: 60 },
-  { id: "recipe-vodka-soda-vodka", menuItemId: "vodka-soda", productId: "product-vodka", quantity: 50 },
-  { id: "recipe-cola", menuItemId: "cola", productId: "product-cola", quantity: 1 },
-  { id: "recipe-water", menuItemId: "sparkling-water", productId: "product-water", quantity: 1 },
-  { id: "recipe-fries", menuItemId: "fries", productId: "product-fries", quantity: 1 },
-  { id: "recipe-burger-patty", menuItemId: "burger", productId: "product-burger-patty", quantity: 1 }
+const DEFAULT_RECIPES: Recipe[] = [
+  {
+    id: "recipe-draft-beer",
+    name: "Draft Beer Recipe",
+    category: "Beer",
+    instructions: "Pour 0.5 L from lager keg.",
+    active: true
+  },
+  {
+    id: "recipe-bottle-beer",
+    name: "Bottle Beer Recipe",
+    category: "Beer",
+    instructions: "Serve one bottle.",
+    active: true
+  },
+  {
+    id: "recipe-mojito",
+    name: "Mojito Recipe",
+    category: "Cocktails",
+    instructions: "White rum, mint, lime, syrup, ice, soda water.",
+    active: true
+  },
+  {
+    id: "recipe-old-fashioned",
+    name: "Old Fashioned Recipe",
+    category: "Cocktails",
+    instructions: "Bourbon, bitters, sugar, orange garnish.",
+    active: true
+  },
+  {
+    id: "recipe-vodka-soda",
+    name: "Vodka Soda Recipe",
+    category: "Spirits",
+    instructions: "Vodka with soda water.",
+    active: true
+  },
+  {
+    id: "recipe-cola",
+    name: "Cola Recipe",
+    category: "Soft Drinks",
+    instructions: "Serve one bottle of cola.",
+    active: true
+  },
+  {
+    id: "recipe-water",
+    name: "Sparkling Water Recipe",
+    category: "Soft Drinks",
+    instructions: "Serve one bottle of sparkling water.",
+    active: true
+  },
+  {
+    id: "recipe-fries",
+    name: "Fries Recipe",
+    category: "Food",
+    instructions: "Serve one fries portion.",
+    active: true
+  },
+  {
+    id: "recipe-burger",
+    name: "Burger Recipe",
+    category: "Food",
+    instructions: "Burger patty and standard burger ingredients.",
+    active: true
+  }
+];
+
+const DEFAULT_RECIPE_INGREDIENTS: RecipeIngredient[] = [
+  {
+    id: "ingredient-draft-beer-keg",
+    recipeId: "recipe-draft-beer",
+    productId: "product-lager-keg",
+    quantity: 0.5
+  },
+  {
+    id: "ingredient-bottle-beer",
+    recipeId: "recipe-bottle-beer",
+    productId: "product-bottle-beer",
+    quantity: 1
+  },
+  {
+    id: "ingredient-mojito-rum",
+    recipeId: "recipe-mojito",
+    productId: "product-white-rum",
+    quantity: 50
+  },
+  {
+    id: "ingredient-old-fashioned-bourbon",
+    recipeId: "recipe-old-fashioned",
+    productId: "product-bourbon",
+    quantity: 60
+  },
+  {
+    id: "ingredient-vodka-soda-vodka",
+    recipeId: "recipe-vodka-soda",
+    productId: "product-vodka",
+    quantity: 50
+  },
+  {
+    id: "ingredient-cola-bottle",
+    recipeId: "recipe-cola",
+    productId: "product-cola",
+    quantity: 1
+  },
+  {
+    id: "ingredient-water-bottle",
+    recipeId: "recipe-water",
+    productId: "product-water",
+    quantity: 1
+  },
+  {
+    id: "ingredient-fries-portion",
+    recipeId: "recipe-fries",
+    productId: "product-fries",
+    quantity: 1
+  },
+  {
+    id: "ingredient-burger-patty",
+    recipeId: "recipe-burger",
+    productId: "product-burger-patty",
+    quantity: 1
+  }
+];
+
+const DEFAULT_MENU: MenuItem[] = [
+  {
+    id: "draft-beer",
+    name: "Draft Beer",
+    category: "Beer",
+    price: 5.5,
+    active: true,
+    recipeId: "recipe-draft-beer"
+  },
+  {
+    id: "bottle-beer",
+    name: "Bottle Beer",
+    category: "Beer",
+    price: 6,
+    active: true,
+    recipeId: "recipe-bottle-beer"
+  },
+  {
+    id: "mojito",
+    name: "Mojito",
+    category: "Cocktails",
+    price: 9.5,
+    active: true,
+    recipeId: "recipe-mojito"
+  },
+  {
+    id: "old-fashioned",
+    name: "Old Fashioned",
+    category: "Cocktails",
+    price: 11,
+    active: true,
+    recipeId: "recipe-old-fashioned"
+  },
+  {
+    id: "vodka-soda",
+    name: "Vodka Soda",
+    category: "Spirits",
+    price: 8,
+    active: true,
+    recipeId: "recipe-vodka-soda"
+  },
+  {
+    id: "cola",
+    name: "Cola",
+    category: "Soft Drinks",
+    price: 3,
+    active: true,
+    recipeId: "recipe-cola"
+  },
+  {
+    id: "sparkling-water",
+    name: "Sparkling Water",
+    category: "Soft Drinks",
+    price: 2.8,
+    active: true,
+    recipeId: "recipe-water"
+  },
+  {
+    id: "fries",
+    name: "Fries",
+    category: "Food",
+    price: 5,
+    active: true,
+    recipeId: "recipe-fries"
+  },
+  {
+    id: "burger",
+    name: "Burger",
+    category: "Food",
+    price: 13,
+    active: true,
+    recipeId: "recipe-burger"
+  }
 ];
 
 function makeId(prefix: string) {
@@ -330,7 +513,9 @@ export default function HomePage() {
 
   const [inventoryProducts, setInventoryProducts] = useState<InventoryProduct[]>(DEFAULT_PRODUCTS);
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
-  const [recipes, setRecipes] = useState<RecipeItem[]>(DEFAULT_RECIPES);
+  const [recipes, setRecipes] = useState<Recipe[]>(DEFAULT_RECIPES);
+  const [recipeIngredients, setRecipeIngredients] =
+    useState<RecipeIngredient[]>(DEFAULT_RECIPE_INGREDIENTS);
 
   const [currentStaffUserId, setCurrentStaffUserId] = useState(DEFAULT_USERS[2].id);
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -346,7 +531,20 @@ export default function HomePage() {
   const [newItem, setNewItem] = useState({
     name: "",
     category: "Cocktails",
-    price: ""
+    price: "",
+    recipeId: ""
+  });
+
+  const [newRecipe, setNewRecipe] = useState({
+    name: "",
+    category: "Cocktails",
+    instructions: ""
+  });
+
+  const [recipeIngredientForm, setRecipeIngredientForm] = useState({
+    recipeId: DEFAULT_RECIPES[0].id,
+    productId: DEFAULT_PRODUCTS[0].id,
+    quantity: ""
   });
 
   const [newUser, setNewUser] = useState({
@@ -398,12 +596,6 @@ export default function HomePage() {
     note: ""
   });
 
-  const [recipeForm, setRecipeForm] = useState({
-    menuItemId: DEFAULT_MENU[0].id,
-    productId: DEFAULT_PRODUCTS[0].id,
-    quantity: ""
-  });
-
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
 
@@ -417,7 +609,8 @@ export default function HomePage() {
           orders?: Order[];
           inventoryProducts?: InventoryProduct[];
           stockMovements?: StockMovement[];
-          recipes?: RecipeItem[];
+          recipes?: Recipe[];
+          recipeIngredients?: RecipeIngredient[];
         };
 
         if (Array.isArray(parsed.menuItems)) setMenuItems(parsed.menuItems);
@@ -428,6 +621,7 @@ export default function HomePage() {
         if (Array.isArray(parsed.inventoryProducts)) setInventoryProducts(parsed.inventoryProducts);
         if (Array.isArray(parsed.stockMovements)) setStockMovements(parsed.stockMovements);
         if (Array.isArray(parsed.recipes)) setRecipes(parsed.recipes);
+        if (Array.isArray(parsed.recipeIngredients)) setRecipeIngredients(parsed.recipeIngredients);
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
       }
@@ -449,10 +643,22 @@ export default function HomePage() {
         orders,
         inventoryProducts,
         stockMovements,
-        recipes
+        recipes,
+        recipeIngredients
       })
     );
-  }, [loaded, menuItems, users, tables, tabs, orders, inventoryProducts, stockMovements, recipes]);
+  }, [
+    loaded,
+    menuItems,
+    users,
+    tables,
+    tabs,
+    orders,
+    inventoryProducts,
+    stockMovements,
+    recipes,
+    recipeIngredients
+  ]);
 
   useEffect(() => {
     if (selectedTabTarget === "quick") return;
@@ -469,6 +675,8 @@ export default function HomePage() {
   const openTabs = tabs.filter((tab) => tab.status === "open");
   const closedTabs = tabs.filter((tab) => tab.status === "closed");
   const activeProducts = inventoryProducts.filter((product) => product.active);
+  const activeRecipes = recipes.filter((recipe) => recipe.active);
+
   const lowStockProducts = inventoryProducts.filter(
     (product) => product.active && product.stock <= product.reorderPoint
   );
@@ -561,12 +769,36 @@ export default function HomePage() {
     return tables.find((table) => table.id === tableId)?.name || "Unknown table";
   }
 
-  function getMenuItemName(menuItemId: string) {
-    return menuItems.find((item) => item.id === menuItemId)?.name || "Unknown menu item";
+  function getRecipe(recipeId?: string) {
+    if (!recipeId) return undefined;
+    return recipes.find((recipe) => recipe.id === recipeId);
+  }
+
+  function getRecipeName(recipeId?: string) {
+    return getRecipe(recipeId)?.name || "No recipe";
   }
 
   function getProduct(productId: string) {
     return inventoryProducts.find((product) => product.id === productId);
+  }
+
+  function getProductName(productId: string) {
+    return getProduct(productId)?.name || "Unknown product";
+  }
+
+  function getRecipeCost(recipeId?: string) {
+    if (!recipeId) return 0;
+
+    return recipeIngredients
+      .filter((ingredient) => ingredient.recipeId === recipeId)
+      .reduce((sum, ingredient) => {
+        const product = getProduct(ingredient.productId);
+        return sum + ingredient.quantity * (product?.costPerUnit || 0);
+      }, 0);
+  }
+
+  function getRecipeIngredientCount(recipeId: string) {
+    return recipeIngredients.filter((ingredient) => ingredient.recipeId === recipeId).length;
   }
 
   function addToCart(item: MenuItem) {
@@ -611,11 +843,19 @@ export default function HomePage() {
     const requiredProducts = new Map<string, number>();
 
     orderItems.forEach((orderItem) => {
-      recipes
-        .filter((recipe) => recipe.menuItemId === orderItem.itemId)
-        .forEach((recipe) => {
-          const current = requiredProducts.get(recipe.productId) || 0;
-          requiredProducts.set(recipe.productId, current + recipe.quantity * orderItem.quantity);
+      const menuItem = menuItems.find((item) => item.id === orderItem.itemId);
+      const recipeId = menuItem?.recipeId;
+
+      if (!recipeId) return;
+
+      recipeIngredients
+        .filter((ingredient) => ingredient.recipeId === recipeId)
+        .forEach((ingredient) => {
+          const current = requiredProducts.get(ingredient.productId) || 0;
+          requiredProducts.set(
+            ingredient.productId,
+            current + ingredient.quantity * orderItem.quantity
+          );
         });
     });
 
@@ -651,7 +891,7 @@ export default function HomePage() {
           unitCost: product?.costPerUnit || 0,
           supplier: product?.supplier || "",
           reference,
-          note: "Automatic deduction from menu item recipe",
+          note: "Automatic deduction from attached recipe",
           createdAt: now
         };
       }
@@ -884,14 +1124,16 @@ export default function HomePage() {
         name,
         category,
         price,
-        active: true
+        active: true,
+        recipeId: newItem.recipeId || undefined
       }
     ]);
 
     setNewItem({
       name: "",
       category,
-      price: ""
+      price: "",
+      recipeId: ""
     });
 
     setSelectedCategory("All");
@@ -916,7 +1158,157 @@ export default function HomePage() {
 
     setMenuItems((current) => current.filter((item) => item.id !== itemId));
     setCart((current) => current.filter((item) => item.itemId !== itemId));
-    setRecipes((current) => current.filter((recipe) => recipe.menuItemId !== itemId));
+  }
+
+  function addRecipe(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const name = newRecipe.name.trim();
+    const category = newRecipe.category.trim();
+    const instructions = newRecipe.instructions.trim();
+
+    if (!name) {
+      alert("Enter recipe name.");
+      return;
+    }
+
+    if (!category) {
+      alert("Enter recipe category.");
+      return;
+    }
+
+    const recipe: Recipe = {
+      id: makeId("recipe"),
+      name,
+      category,
+      instructions,
+      active: true
+    };
+
+    setRecipes((current) => [...current, recipe]);
+    setRecipeIngredientForm((current) => ({ ...current, recipeId: recipe.id }));
+
+    setNewRecipe({
+      name: "",
+      category,
+      instructions: ""
+    });
+  }
+
+  function updateRecipe(recipeId: string, changes: Partial<Recipe>) {
+    setRecipes((current) =>
+      current.map((recipe) => (recipe.id === recipeId ? { ...recipe, ...changes } : recipe))
+    );
+  }
+
+  function toggleRecipe(recipeId: string) {
+    setRecipes((current) =>
+      current.map((recipe) =>
+        recipe.id === recipeId ? { ...recipe, active: !recipe.active } : recipe
+      )
+    );
+  }
+
+  function deleteRecipe(recipeId: string) {
+    const attachedCount = menuItems.filter((item) => item.recipeId === recipeId).length;
+    const message =
+      attachedCount > 0
+        ? `This recipe is attached to ${attachedCount} POS menu item(s). Delete it anyway? The menu items will keep selling but will no longer deduct stock.`
+        : "Delete this recipe?";
+
+    const approved = confirm(message);
+
+    if (!approved) return;
+
+    setRecipes((current) => current.filter((recipe) => recipe.id !== recipeId));
+    setRecipeIngredients((current) =>
+      current.filter((ingredient) => ingredient.recipeId !== recipeId)
+    );
+    setMenuItems((current) =>
+      current.map((item) =>
+        item.recipeId === recipeId ? { ...item, recipeId: undefined } : item
+      )
+    );
+  }
+
+  function addRecipeIngredient(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const quantity = Number(recipeIngredientForm.quantity);
+
+    if (!recipeIngredientForm.recipeId) {
+      alert("Select recipe.");
+      return;
+    }
+
+    if (!recipeIngredientForm.productId) {
+      alert("Select product.");
+      return;
+    }
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      alert("Enter quantity used in this recipe.");
+      return;
+    }
+
+    const existing = recipeIngredients.find(
+      (ingredient) =>
+        ingredient.recipeId === recipeIngredientForm.recipeId &&
+        ingredient.productId === recipeIngredientForm.productId
+    );
+
+    if (existing) {
+      setRecipeIngredients((current) =>
+        current.map((ingredient) =>
+          ingredient.id === existing.id ? { ...ingredient, quantity } : ingredient
+        )
+      );
+    } else {
+      setRecipeIngredients((current) => [
+        ...current,
+        {
+          id: makeId("ingredient"),
+          recipeId: recipeIngredientForm.recipeId,
+          productId: recipeIngredientForm.productId,
+          quantity
+        }
+      ]);
+    }
+
+    setRecipeIngredientForm((current) => ({ ...current, quantity: "" }));
+  }
+
+  function deleteRecipeIngredient(ingredientId: string) {
+    setRecipeIngredients((current) =>
+      current.filter((ingredient) => ingredient.id !== ingredientId)
+    );
+  }
+
+  function createPosItemFromRecipe(recipe: Recipe) {
+    const priceText = prompt(`Enter selling price for ${recipe.name}`, "0");
+
+    if (priceText === null) return;
+
+    const price = Number(priceText);
+
+    if (!Number.isFinite(price) || price <= 0) {
+      alert("Enter a valid price.");
+      return;
+    }
+
+    const menuItem: MenuItem = {
+      id: makeId("menu"),
+      name: recipe.name.replace(" Recipe", ""),
+      category: recipe.category,
+      price,
+      active: true,
+      recipeId: recipe.id
+    };
+
+    setMenuItems((current) => [...current, menuItem]);
+    setView("menu");
+
+    alert(`${menuItem.name} added to POS and attached to ${recipe.name}.`);
   }
 
   function addProduct(event: FormEvent<HTMLFormElement>) {
@@ -1164,60 +1556,6 @@ export default function HomePage() {
     });
   }
 
-  function addRecipeItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const quantity = Number(recipeForm.quantity);
-
-    if (!recipeForm.menuItemId) {
-      alert("Select menu item.");
-      return;
-    }
-
-    if (!recipeForm.productId) {
-      alert("Select inventory product.");
-      return;
-    }
-
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      alert("Enter quantity used per sale.");
-      return;
-    }
-
-    const existing = recipes.find(
-      (recipe) =>
-        recipe.menuItemId === recipeForm.menuItemId &&
-        recipe.productId === recipeForm.productId
-    );
-
-    if (existing) {
-      setRecipes((current) =>
-        current.map((recipe) =>
-          recipe.id === existing.id ? { ...recipe, quantity } : recipe
-        )
-      );
-    } else {
-      setRecipes((current) => [
-        ...current,
-        {
-          id: makeId("recipe"),
-          menuItemId: recipeForm.menuItemId,
-          productId: recipeForm.productId,
-          quantity
-        }
-      ]);
-    }
-
-    setRecipeForm({
-      ...recipeForm,
-      quantity: ""
-    });
-  }
-
-  function deleteRecipeItem(recipeId: string) {
-    setRecipes((current) => current.filter((recipe) => recipe.id !== recipeId));
-  }
-
   function addUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1337,7 +1675,8 @@ export default function HomePage() {
       orders,
       inventoryProducts,
       stockMovements,
-      recipes
+      recipes,
+      recipeIngredients
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -1368,6 +1707,7 @@ export default function HomePage() {
     setInventoryProducts(DEFAULT_PRODUCTS);
     setStockMovements([]);
     setRecipes(DEFAULT_RECIPES);
+    setRecipeIngredients(DEFAULT_RECIPE_INGREDIENTS);
     setTip("0");
     setDiscount("0");
     setCashCounted("");
@@ -1405,7 +1745,7 @@ export default function HomePage() {
       <header className="header">
         <div className="container">
           <h1>My Bar POS</h1>
-          <p>Phase 1: POS, menu, tables, users, products, stock, reports, and closing.</p>
+          <p>POS, menu, recipes, stock, product arrivals, users, reports, and closing.</p>
 
           <nav className="nav">
             {navItems.map((item) => (
@@ -1433,8 +1773,8 @@ export default function HomePage() {
             <div className="kpi-value">{openTabs.length}</div>
           </div>
           <div className="card">
-            <div className="kpi-label">Inventory Value</div>
-            <div className="kpi-value">{money(inventoryValue)}</div>
+            <div className="kpi-label">Recipes</div>
+            <div className="kpi-value">{recipes.length}</div>
           </div>
           <div className="card">
             <div className="kpi-label">Low Stock</div>
@@ -1447,19 +1787,19 @@ export default function HomePage() {
             <div className="card">
               <h2>Dashboard</h2>
               <p>
-                Your app now includes POS, menu setup, tables, tabs, users, admin controls,
-                product stock, stock arrivals, waste, recipes, and automatic stock deduction.
+                You can now create recipes, add stock products to recipes, attach recipes to POS
+                menu items, and deduct stock automatically when menu items are sold.
               </p>
 
               <div className="button-row">
-                <button className="primary" type="button" onClick={() => setView("pos")}>
+                <button className="primary" type="button" onClick={() => setView("products")}>
+                  Create Recipe
+                </button>
+                <button className="secondary" type="button" onClick={() => setView("menu")}>
+                  Attach Recipe to POS Item
+                </button>
+                <button className="secondary" type="button" onClick={() => setView("pos")}>
                   Open POS
-                </button>
-                <button className="secondary" type="button" onClick={() => setView("products")}>
-                  Open Products / Stock
-                </button>
-                <button className="secondary" type="button" onClick={() => setView("tabs")}>
-                  Open Tabs
                 </button>
               </div>
             </div>
@@ -1536,6 +1876,9 @@ export default function HomePage() {
                     <strong>{item.name}</strong>
                     <span className="muted">{item.category}</span>
                     <div className="menu-price">{money(item.price)}</div>
+                    <div className="muted">
+                      Recipe: {item.recipeId ? getRecipeName(item.recipeId) : "None"}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -1856,11 +2199,11 @@ export default function HomePage() {
         {view === "menu" && (
           <div className="grid grid-2" style={{ marginTop: 16 }}>
             <div className="card">
-              <h2>Add Menu Item</h2>
+              <h2>Add POS Menu Item</h2>
 
               <form onSubmit={addMenuItem} className="form-stack">
                 <label>
-                  Item name
+                  POS item name
                   <input
                     value={newItem.name}
                     onChange={(event) => setNewItem({ ...newItem, name: event.target.value })}
@@ -1869,7 +2212,7 @@ export default function HomePage() {
                 </label>
 
                 <label>
-                  Category
+                  POS category
                   <input
                     value={newItem.category}
                     onChange={(event) =>
@@ -1880,7 +2223,7 @@ export default function HomePage() {
                 </label>
 
                 <label>
-                  Price
+                  Selling price
                   <input
                     value={newItem.price}
                     onChange={(event) => setNewItem({ ...newItem, price: event.target.value })}
@@ -1891,13 +2234,29 @@ export default function HomePage() {
                   />
                 </label>
 
+                <label>
+                  Attach recipe
+                  <select
+                    value={newItem.recipeId}
+                    onChange={(event) => setNewItem({ ...newItem, recipeId: event.target.value })}
+                  >
+                    <option value="">No recipe / no stock deduction</option>
+                    {activeRecipes.map((recipe) => (
+                      <option key={recipe.id} value={recipe.id}>
+                        {recipe.name} — cost {money(getRecipeCost(recipe.id))}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
                 <button className="primary" type="submit">
-                  Add Item
+                  Add POS Item
                 </button>
               </form>
 
               <div className="notice">
-                After adding a menu item, connect it to products in Products / Stock using recipes.
+                Create recipes in Products / Stock first, then attach a recipe here when creating
+                the POS item.
               </div>
             </div>
 
@@ -1905,16 +2264,16 @@ export default function HomePage() {
               <h2>Menu Summary</h2>
 
               <div className="line">
-                <span>Total menu items</span>
+                <span>Total POS items</span>
                 <strong>{menuItems.length}</strong>
               </div>
               <div className="line">
-                <span>Active items</span>
-                <strong>{menuItems.filter((item) => item.active).length}</strong>
+                <span>Items with recipe</span>
+                <strong>{menuItems.filter((item) => item.recipeId).length}</strong>
               </div>
               <div className="line">
-                <span>Inactive items</span>
-                <strong>{menuItems.filter((item) => !item.active).length}</strong>
+                <span>Items without recipe</span>
+                <strong>{menuItems.filter((item) => !item.recipeId).length}</strong>
               </div>
               <div className="line">
                 <span>Categories</span>
@@ -1923,14 +2282,16 @@ export default function HomePage() {
             </div>
 
             <div className="card full-width">
-              <h2>Current Menu</h2>
+              <h2>Current POS Menu</h2>
 
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Item Name</th>
+                    <th>POS Item</th>
                     <th>Category</th>
                     <th>Price</th>
+                    <th>Attached Recipe</th>
+                    <th>Recipe Cost</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -1968,6 +2329,26 @@ export default function HomePage() {
                           step="0.01"
                           aria-label="Item price"
                         />
+                      </td>
+                      <td>
+                        <select
+                          value={item.recipeId || ""}
+                          onChange={(event) =>
+                            updateMenuItem(item.id, {
+                              recipeId: event.target.value || undefined
+                            })
+                          }
+                        >
+                          <option value="">No recipe</option>
+                          {recipes.map((recipe) => (
+                            <option key={recipe.id} value={recipe.id}>
+                              {recipe.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <strong>{money(getRecipeCost(item.recipeId))}</strong>
                       </td>
                       <td>
                         <strong className={item.active ? "status-active" : "status-inactive"}>
@@ -2012,8 +2393,16 @@ export default function HomePage() {
                 <strong>{inventoryProducts.length}</strong>
               </div>
               <div className="line">
-                <span>Active products</span>
-                <strong>{activeProducts.length}</strong>
+                <span>Inventory value</span>
+                <strong>{money(inventoryValue)}</strong>
+              </div>
+              <div className="line">
+                <span>Total recipes</span>
+                <strong>{recipes.length}</strong>
+              </div>
+              <div className="line">
+                <span>Recipe ingredients</span>
+                <strong>{recipeIngredients.length}</strong>
               </div>
               <div className="line">
                 <span>Low-stock products</span>
@@ -2021,9 +2410,117 @@ export default function HomePage() {
                   {lowStockProducts.length}
                 </strong>
               </div>
-              <div className="line">
-                <span>Inventory value</span>
-                <strong>{money(inventoryValue)}</strong>
+            </div>
+
+            <div className="card">
+              <h2>Create Recipe</h2>
+
+              <form onSubmit={addRecipe} className="form-stack">
+                <label>
+                  Recipe name
+                  <input
+                    value={newRecipe.name}
+                    onChange={(event) => setNewRecipe({ ...newRecipe, name: event.target.value })}
+                    placeholder="Example: Margarita Recipe"
+                  />
+                </label>
+
+                <label>
+                  Recipe category
+                  <input
+                    value={newRecipe.category}
+                    onChange={(event) =>
+                      setNewRecipe({ ...newRecipe, category: event.target.value })
+                    }
+                    placeholder="Example: Cocktails"
+                  />
+                </label>
+
+                <label>
+                  Instructions / notes
+                  <textarea
+                    value={newRecipe.instructions}
+                    onChange={(event) =>
+                      setNewRecipe({ ...newRecipe, instructions: event.target.value })
+                    }
+                    placeholder="Example: Tequila, lime juice, triple sec, salt rim..."
+                    rows={4}
+                  />
+                </label>
+
+                <button className="primary" type="submit">
+                  Create Recipe
+                </button>
+              </form>
+            </div>
+
+            <div className="card">
+              <h2>Add Ingredient to Recipe</h2>
+
+              <form onSubmit={addRecipeIngredient} className="form-stack">
+                <label>
+                  Recipe
+                  <select
+                    value={recipeIngredientForm.recipeId}
+                    onChange={(event) =>
+                      setRecipeIngredientForm({
+                        ...recipeIngredientForm,
+                        recipeId: event.target.value
+                      })
+                    }
+                  >
+                    {recipes.map((recipe) => (
+                      <option key={recipe.id} value={recipe.id}>
+                        {recipe.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Stock product
+                  <select
+                    value={recipeIngredientForm.productId}
+                    onChange={(event) =>
+                      setRecipeIngredientForm({
+                        ...recipeIngredientForm,
+                        productId: event.target.value
+                      })
+                    }
+                  >
+                    {inventoryProducts.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} — {product.unit}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Quantity used per sale
+                  <input
+                    value={recipeIngredientForm.quantity}
+                    onChange={(event) =>
+                      setRecipeIngredientForm({
+                        ...recipeIngredientForm,
+                        quantity: event.target.value
+                      })
+                    }
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    placeholder="Example: 50 for 50ml"
+                  />
+                </label>
+
+                <button className="primary" type="submit">
+                  Add Ingredient to Recipe
+                </button>
+              </form>
+
+              <div className="notice">
+                If the same product is already in the selected recipe, saving again updates the
+                quantity.
               </div>
             </div>
 
@@ -2116,9 +2613,6 @@ export default function HomePage() {
 
             <div className="card">
               <h2>Receive Stock / Product Arrivals</h2>
-              <p className="muted">
-                Use this when products arrive from suppliers. This adds quantity to stock and records a delivery movement.
-              </p>
 
               <form onSubmit={receiveStock} className="form-stack">
                 <label>
@@ -2306,63 +2800,162 @@ export default function HomePage() {
               </form>
             </div>
 
-            <div className="card">
-              <h2>Recipe Setup</h2>
-              <p className="muted">
-                Link menu items to stock products. When the menu item is sold, stock is deducted automatically.
-              </p>
+            <div className="card full-width">
+              <h2>Recipes</h2>
 
-              <form onSubmit={addRecipeItem} className="form-stack">
-                <label>
-                  Menu item
-                  <select
-                    value={recipeForm.menuItemId}
-                    onChange={(event) =>
-                      setRecipeForm({ ...recipeForm, menuItemId: event.target.value })
-                    }
-                  >
-                    {menuItems.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Recipe</th>
+                    <th>Category</th>
+                    <th>Ingredients</th>
+                    <th>Recipe Cost</th>
+                    <th>Attached POS Items</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
 
-                <label>
-                  Stock product
-                  <select
-                    value={recipeForm.productId}
-                    onChange={(event) =>
-                      setRecipeForm({ ...recipeForm, productId: event.target.value })
-                    }
-                  >
-                    {inventoryProducts.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name} — {product.unit}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <tbody>
+                  {recipes.map((recipe) => {
+                    const attachedItems = menuItems.filter((item) => item.recipeId === recipe.id);
 
-                <label>
-                  Quantity used per sale
-                  <input
-                    value={recipeForm.quantity}
-                    onChange={(event) =>
-                      setRecipeForm({ ...recipeForm, quantity: event.target.value })
-                    }
-                    type="number"
-                    min="0"
-                    step="0.001"
-                    placeholder="Example: 50 for 50ml"
-                  />
-                </label>
+                    return (
+                      <tr key={recipe.id}>
+                        <td>
+                          <input
+                            value={recipe.name}
+                            onChange={(event) =>
+                              updateRecipe(recipe.id, { name: event.target.value })
+                            }
+                          />
+                          <textarea
+                            value={recipe.instructions}
+                            onChange={(event) =>
+                              updateRecipe(recipe.id, { instructions: event.target.value })
+                            }
+                            rows={2}
+                            placeholder="Recipe notes"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            value={recipe.category}
+                            onChange={(event) =>
+                              updateRecipe(recipe.id, { category: event.target.value })
+                            }
+                          />
+                        </td>
+                        <td>
+                          <strong>{getRecipeIngredientCount(recipe.id)}</strong>
+                        </td>
+                        <td>
+                          <strong>{money(getRecipeCost(recipe.id))}</strong>
+                        </td>
+                        <td>
+                          {attachedItems.length === 0 ? (
+                            <span className="muted">None</span>
+                          ) : (
+                            attachedItems.map((item) => item.name).join(", ")
+                          )}
+                        </td>
+                        <td>
+                          <strong className={recipe.active ? "status-active" : "status-inactive"}>
+                            {recipe.active ? "Active" : "Inactive"}
+                          </strong>
+                        </td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              className="primary"
+                              type="button"
+                              onClick={() => createPosItemFromRecipe(recipe)}
+                            >
+                              Create POS Item
+                            </button>
+                            <button
+                              className="secondary"
+                              type="button"
+                              onClick={() => toggleRecipe(recipe.id)}
+                            >
+                              {recipe.active ? "Deactivate" : "Activate"}
+                            </button>
+                            <button
+                              className="danger small"
+                              type="button"
+                              onClick={() => deleteRecipe(recipe.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
-                <button className="primary" type="submit">
-                  Save Recipe Line
-                </button>
-              </form>
+                  {recipes.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="muted">
+                        No recipes yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="card full-width">
+              <h2>Recipe Ingredients</h2>
+
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Recipe</th>
+                    <th>Stock Product</th>
+                    <th>Quantity per Sale</th>
+                    <th>Cost</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {recipeIngredients.map((ingredient) => {
+                    const recipe = getRecipe(ingredient.recipeId);
+                    const product = getProduct(ingredient.productId);
+                    const cost = ingredient.quantity * (product?.costPerUnit || 0);
+
+                    return (
+                      <tr key={ingredient.id}>
+                        <td>{recipe?.name || "Unknown recipe"}</td>
+                        <td>{product?.name || "Unknown product"}</td>
+                        <td>
+                          {numberText(ingredient.quantity)} {product?.unit || ""}
+                        </td>
+                        <td>
+                          <strong>{money(cost)}</strong>
+                        </td>
+                        <td>
+                          <button
+                            className="danger small"
+                            type="button"
+                            onClick={() => deleteRecipeIngredient(ingredient.id)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {recipeIngredients.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="muted">
+                        No recipe ingredients yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
 
             <div className="card full-width">
@@ -2376,7 +2969,7 @@ export default function HomePage() {
                     <th>Supplier</th>
                     <th>Stock</th>
                     <th>Reorder</th>
-                    <th>Unit cost</th>
+                    <th>Unit Cost</th>
                     <th>Value</th>
                     <th>Status</th>
                     <th>Action</th>
@@ -2468,54 +3061,6 @@ export default function HomePage() {
             </div>
 
             <div className="card full-width">
-              <h2>Recipe Links</h2>
-
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Menu item</th>
-                    <th>Stock product</th>
-                    <th>Quantity per sale</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {recipes.map((recipe) => {
-                    const product = getProduct(recipe.productId);
-
-                    return (
-                      <tr key={recipe.id}>
-                        <td>{getMenuItemName(recipe.menuItemId)}</td>
-                        <td>{product?.name || "Unknown product"}</td>
-                        <td>
-                          {numberText(recipe.quantity)} {product?.unit || ""}
-                        </td>
-                        <td>
-                          <button
-                            className="danger small"
-                            type="button"
-                            onClick={() => deleteRecipeItem(recipe.id)}
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {recipes.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="muted">
-                        No recipe links yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="card full-width">
               <h2>Recent Stock Movements</h2>
 
               <table className="table">
@@ -2585,6 +3130,10 @@ export default function HomePage() {
                 <strong>{money(inventoryValue)}</strong>
               </div>
               <div className="line">
+                <span>Recipes</span>
+                <strong>{recipes.length}</strong>
+              </div>
+              <div className="line">
                 <span>Low-stock products</span>
                 <strong>{lowStockProducts.length}</strong>
               </div>
@@ -2615,11 +3164,11 @@ export default function HomePage() {
                 <strong className="status-active">Live</strong>
               </div>
               <div className="line">
-                <span>Users dashboard</span>
+                <span>Products / stock</span>
                 <strong className="status-active">Live</strong>
               </div>
               <div className="line">
-                <span>Products / stock</span>
+                <span>Recipe creation</span>
                 <strong className="status-active">Live</strong>
               </div>
               <div className="line">
@@ -2850,7 +3399,7 @@ export default function HomePage() {
             </div>
 
             <div className="card">
-              <h2>Inventory Report</h2>
+              <h2>Inventory / Recipe Report</h2>
 
               <div className="line">
                 <span>Inventory value</span>
@@ -2861,12 +3410,16 @@ export default function HomePage() {
                 <strong>{lowStockProducts.length}</strong>
               </div>
               <div className="line">
-                <span>Stock movements</span>
-                <strong>{stockMovements.length}</strong>
+                <span>Recipes</span>
+                <strong>{recipes.length}</strong>
               </div>
               <div className="line">
-                <span>Recipe links</span>
-                <strong>{recipes.length}</strong>
+                <span>Recipe ingredients</span>
+                <strong>{recipeIngredients.length}</strong>
+              </div>
+              <div className="line">
+                <span>Stock movements</span>
+                <strong>{stockMovements.length}</strong>
               </div>
             </div>
 
