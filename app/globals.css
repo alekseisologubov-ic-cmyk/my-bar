@@ -1,0 +1,320 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #f3f4f6;
+  color: #111827;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.header {
+  background: #111827;
+  color: white;
+  padding: 24px;
+}
+
+.header-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.logo {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.subtitle {
+  color: #cbd5e1;
+  margin-top: 4px;
+}
+
+.badge {
+  background: #22c55e;
+  color: #052e16;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+.nav button {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: #1f2937;
+  color: white;
+  font-weight: 800;
+}
+
+.nav button.active {
+  background: white;
+  color: #111827;
+}
+
+.container {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.card.dark {
+  background: #111827;
+  color: white;
+}
+
+.kpi-label {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.kpi-value {
+  margin-top: 8px;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.title {
+  margin: 0 0 16px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.muted {
+  color: #6b7280;
+}
+
+.form-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1.3fr 1fr 0.7fr auto;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: white;
+}
+
+.primary {
+  border: 0;
+  background: #111827;
+  color: white;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-weight: 900;
+}
+
+.secondary {
+  border: 0;
+  background: #e5e7eb;
+  color: #111827;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-weight: 900;
+}
+
+.danger {
+  border: 0;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-weight: 900;
+}
+
+.menu-button {
+  width: 100%;
+  min-height: 96px;
+  text-align: left;
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.menu-button:hover {
+  border-color: #111827;
+}
+
+.menu-name {
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.menu-meta {
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.price {
+  margin-top: 10px;
+  font-weight: 900;
+  font-size: 18px;
+}
+
+.cart-line,
+.report-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.qty-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.qty-controls button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  background: #e5e7eb;
+  font-weight: 900;
+}
+
+.total-line {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-weight: 800;
+}
+
+.grand-total {
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: top;
+}
+
+.table th {
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.status-paid {
+  color: #166534;
+  font-weight: 900;
+}
+
+.status-voided {
+  color: #991b1b;
+  font-weight: 900;
+}
+
+.notice {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  border-radius: 16px;
+  padding: 16px;
+  font-weight: 700;
+}
+
+.footer-note {
+  margin-top: 24px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .grid-4,
+  .grid-3,
+  .grid-2,
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .container {
+    padding: 16px;
+  }
+}
